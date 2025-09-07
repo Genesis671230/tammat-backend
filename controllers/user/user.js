@@ -78,17 +78,13 @@ const register = async (req, res) => {
       phoneNumber,
       password,
       role = 'user',
-      employeeId
     } = req.body;
 
     // Check if user exists
 
-    const totalUsers = await User.countDocuments();
-    if(employeeId==""){
-      employeeId = `EMP-${totalUsers + 1}`;
-    }
+
     const existingUser = await User.findOne({ 
-      $or: [{ email }, { employeeId }] 
+      $or: [{ email }] 
     });
 
 
@@ -96,7 +92,7 @@ const register = async (req, res) => {
       return res.status(400).json({ 
         error: existingUser.email === email 
           ? 'Email already in use' 
-          : 'Employee ID already exists' 
+          : 'Email already exists' 
       });
     }
 
@@ -111,7 +107,6 @@ const register = async (req, res) => {
       phoneNumber,
       password: hashedPassword,
       role,
-      employeeId,
     });
 
     await user.save();
@@ -351,16 +346,10 @@ const createUser = async (req, res) => {
       phoneNumber, 
       password, 
       role, 
-      employeeId 
     } = req.body;
 
-    let employeeIdNew="";
-    const totalUsers = await User.countDocuments();
-    if(employeeId==""){
-      employeeIdNew = `EMP-${totalUsers + 1}`;
-    }
     const existingUser = await User.findOne({ 
-      $or: [{ email }, { employeeId:employeeIdNew }] 
+      $or: [{ email }] 
     });
 
 
@@ -385,7 +374,6 @@ const createUser = async (req, res) => {
       phoneNumber,
       password: hashedPassword,
       role,
-      employeeId:employeeIdNew,
     });
 
     await user.save();

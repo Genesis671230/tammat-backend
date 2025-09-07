@@ -7,6 +7,8 @@ class OpenAIService {
   constructor() {
     this.client = null;
     this.isEnabled = false;
+    this.maxRetries = 3;
+    this.baseDelayMs = 500;
     
     if (process.env.OPENAI_API_KEY) {
       try {
@@ -21,6 +23,64 @@ class OpenAIService {
     } else {
       console.log('OpenAI API key not found - AI features disabled');
     }
+  }
+
+  // Basic sleep helper
+  async sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  // Decide if error is transient and worth retrying
+  isTransientError(error) {
+    const message = String(error?.message || '').toLowerCase();
+    const status = error?.status || error?.code;
+    if (status && [408, 409, 425, 429, 500, 502, 503, 504].includes(Number(status))) return true;
+    if (message.includes('timeout') || message.includes('timed out')) return true;
+    if (message.includes('network') || message.includes('unavailable') || message.includes('temporarily')) return true;
+    return false;
+  }
+
+  // Generic retry wrapper
+  async withRetry(actionFn, description = 'openai_call') {
+    let lastError;
+    for (let attempt = 0; attempt < this.maxRetries; attempt++) {
+      try {
+        return await actionFn();
+      } catch (err) {
+        lastError = err;
+        if (!this.isTransientError(err) || attempt === this.maxRetries - 1) break;
+        const delay = this.baseDelayMs * Math.pow(2, attempt) + Math.floor(Math.random() * 200);
+        console.warn(`[OpenAI retry] ${description} attempt ${attempt + 1} failed: ${err?.message || err}. Retrying in ${delay}ms...`);
+        await this.sleep(delay);
+      }
+    }
+    throw lastError;
+  }
+
+  // Low-level chat completion with retry
+  async chatComplete(messages, options = {}) {
+    if (!this.isEnabled) {
+      return { content: null, raw: null };
+    }
+    const {
+      model = 'gpt-4',
+      max_tokens = 500,
+      temperature = 0.7,
+      presence_penalty = 0.1,
+      frequency_penalty = 0.1,
+    } = options;
+
+    const completion = await this.withRetry(() => this.client.chat.completions.create({
+      model,
+      messages,
+      max_tokens,
+      temperature,
+      presence_penalty,
+      frequency_penalty
+    }), 'chat.completions.create');
+
+    const content = completion?.choices?.[0]?.message?.content || null;
+    return { content, raw: completion };
   }
 
   // Generate AI response for chat
@@ -74,17 +134,14 @@ Price Range: ${service.prices?.map(p => `${p.PriceAmount} ${p.PriceCurrency} (${
         { role: 'user', content: userMessage }
       ];
 
-      // Generate response
-      const completion = await this.client.chat.completions.create({
+      // Generate response with retry
+      const { content: response } = await this.chatComplete(messages, {
         model: 'gpt-4',
-        messages: messages,
         max_tokens: 500,
         temperature: 0.7,
         presence_penalty: 0.1,
-        frequency_penalty: 0.1
+        frequency_penalty: 0.1,
       });
-
-      const response = completion.choices[0]?.message?.content;
       
       if (!response) {
         throw new Error('No response generated');
@@ -168,14 +225,9 @@ Please analyze and suggest the top 3-5 most relevant services. Consider:
 
 Respond with a JSON array of service recommendations with reasoning.`;
 
-      const completion = await this.client.chat.completions.create({
-        model: 'gpt-4',
-        messages: [{ role: 'user', content: prompt }],
-        max_tokens: 300,
-        temperature: 0.3
-      });
-
-      const response = completion.choices[0]?.message?.content;
+      const { content: response } = await this.chatComplete([
+        { role: 'user', content: prompt }
+      ], { model: 'gpt-4', max_tokens: 300, temperature: 0.3 });
       
       try {
         return JSON.parse(response);
@@ -219,14 +271,11 @@ Generate a comprehensive, personalized checklist with:
 
 Format as a structured checklist.`;
 
-      const completion = await this.client.chat.completions.create({
-        model: 'gpt-4',
-        messages: [{ role: 'user', content: prompt }],
-        max_tokens: 600,
-        temperature: 0.3
-      });
+      const { content } = await this.chatComplete([
+        { role: 'user', content: prompt }
+      ], { model: 'gpt-4', max_tokens: 600, temperature: 0.3 });
 
-      return completion.choices[0]?.message?.content;
+      return content;
 
     } catch (error) {
       console.error('Error generating document checklist:', error);
@@ -262,14 +311,11 @@ Please provide:
 
 Be specific and actionable in your analysis.`;
 
-      const completion = await this.client.chat.completions.create({
-        model: 'gpt-4',
-        messages: [{ role: 'user', content: prompt }],
-        max_tokens: 400,
-        temperature: 0.3
-      });
+      const { content } = await this.chatComplete([
+        { role: 'user', content: prompt }
+      ], { model: 'gpt-4', max_tokens: 400, temperature: 0.3 });
 
-      return completion.choices[0]?.message?.content;
+      return content;
 
     } catch (error) {
       console.error('Error analyzing documents:', error);
@@ -299,14 +345,11 @@ Provide:
 
 Keep it concise but informative, and maintain a reassuring tone.`;
 
-      const completion = await this.client.chat.completions.create({
-        model: 'gpt-4',
-        messages: [{ role: 'user', content: prompt }],
-        max_tokens: 300,
-        temperature: 0.4
-      });
+      const { content } = await this.chatComplete([
+        { role: 'user', content: prompt }
+      ], { model: 'gpt-4', max_tokens: 300, temperature: 0.4 });
 
-      return completion.choices[0]?.message?.content || `Your application status has been updated from ${oldStatus} to ${newStatus}.`;
+      return content || `Your application status has been updated from ${oldStatus} to ${newStatus}.`;
 
     } catch (error) {
       console.error('Error explaining status update:', error);
@@ -339,6 +382,7 @@ Keep it concise but informative, and maintain a reassuring tone.`;
 const openaiService = new OpenAIService();
 
 module.exports = {
+  chatComplete: (messages, options) => openaiService.chatComplete(messages, options),
   generateAIResponse: (userMessage, applicationId, language) => 
     openaiService.generateAIResponse(userMessage, applicationId, language),
   

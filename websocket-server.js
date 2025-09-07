@@ -6,7 +6,12 @@ class WebSocketServer {
   constructor(server, options = {}) {
     this.io = new Server(server, {
       cors: {
-        origin: process.env.FRONTEND_URL || "http://localhost:5173",
+        origin: [
+          process.env.FRONTEND_URL || "http://localhost:5173",
+          "http://127.0.0.1:5173",
+          "http://localhost:3000",
+          "http://127.0.0.1:3000"
+        ],
         methods: ["GET", "POST"],
         credentials: true
       },
@@ -24,16 +29,22 @@ class WebSocketServer {
     // Authentication middleware
     this.io.use(async (socket, next) => {
       try {
-        const token = socket.handshake.auth.token || socket.handshake.headers.authorization;
+        let token = socket.handshake.auth?.token || socket.handshake.headers?.authorization;
         
         if (!token) {
           return next(new Error('Authentication token required'));
         }
 
+        // Support 'Bearer <token>' format
+        if (typeof token === 'string' && token.startsWith('Bearer ')) {
+          token = token.slice(7).trim();
+        }
+
         // Verify JWT token
-        const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your-secret-key');
-        socket.userId = decoded.userId;
-        socket.userType = decoded.userType || 'user';
+        const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your-secret-key-change-in-production');
+        socket.userId = decoded.userId || decoded.id || decoded._id;
+        const role = decoded.role || decoded.userType || 'user';
+        socket.userType = role === 'amer' ? 'officer' : role;
         socket.userData = decoded;
         
         next();
@@ -55,6 +66,160 @@ class WebSocketServer {
         userData: socket.userData,
         connectedAt: new Date(),
         lastActivity: new Date()
+      });
+
+      // If Amer officer, mark available by default
+      if (socket.userType === 'officer' || socket.userData?.role === 'amer') {
+        this.connectedOfficers.set(socket.userId, {
+          socketId: socket.id,
+          status: 'available',
+          lastUpdate: new Date(),
+          userId: socket.userId,
+          userData: socket.userData
+        });
+      }
+
+      // Handle AI chat messages
+      socket.on('ai_chat_message', async (data) => {
+        try {
+          const response = await fetch('http://localhost:5001/api/v1/chat/process', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${socket.handshake.auth.token}`
+            },
+            body: JSON.stringify({
+              message: data.message,
+              context: data.context
+            })
+          });
+
+          const result = await response.json();
+          
+          if (result.status === 'success') {
+            socket.emit('ai_chat_response', {
+              response: result.response,
+              actions: result.actions
+            });
+
+            // If AI suggests connecting to Amer officer
+            if (result.actions?.some(action => action.type === 'CONNECT_AMER')) {
+              this.handleAmerConnection(socket, data.context?.service);
+            }
+          } else {
+            socket.emit('ai_chat_error', {
+              message: 'Failed to process message'
+            });
+          }
+        } catch (error) {
+          console.error('Error processing AI chat message:', error);
+          socket.emit('ai_chat_error', {
+            message: 'Internal server error'
+          });
+        }
+      });
+
+      // Direct Amer connection request
+      socket.on('request_amer_connection', (data) => {
+        this.handleAmerConnection(socket, data?.service);
+      });
+
+      // User starts conversation with initial message (queue + invite)
+      socket.on('user_start_conversation', (data) => {
+        try {
+          const { service, initialMessage } = data || {};
+          // Find available officer
+          const availableOfficer = Array.from(this.connectedOfficers.values())
+            .find(officer => officer.status === 'available');
+
+          const roomId = `amer_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+          // Create room and join user
+          this.chatRooms.set(roomId, {
+            id: roomId,
+            userId: socket.userId,
+            officerId: availableOfficer?.userId,
+            service,
+            status: 'waiting',
+            createdAt: new Date(),
+            lastActivity: new Date(),
+            messages: []
+          });
+          socket.join(roomId);
+
+          // Queue initial message in room history for later retrieval
+          if (initialMessage && String(initialMessage).trim().length > 0) {
+            const queuedMsg = {
+              id: Date.now().toString(),
+              content: String(initialMessage),
+              type: 'text',
+              sender: socket.userId,
+              timestamp: new Date(),
+              status: 'sent',
+              metadata: { roomId }
+            };
+            this.chatRooms.get(roomId).messages.push(queuedMsg);
+            this.io.to(roomId).emit('new_message', queuedMsg);
+          }
+
+          // Notify user of queue + room id
+          socket.emit('conversation_queued', { roomId });
+
+          // Invite officer if available
+          if (availableOfficer) {
+            const invitePayload = {
+              roomId,
+              userId: socket.userId,
+              userName: socket.userData?.name,
+              service
+            };
+            this.io.to(availableOfficer.socketId).emit('amer_invite', invitePayload);
+          } else {
+            socket.emit('amer_unavailable', {
+              message: 'All Amer officers are currently busy. Please wait a moment or continue with AI assistance.',
+              roomId
+            });
+          }
+        } catch (error) {
+          console.error('Error starting conversation:', error);
+          socket.emit('amer_connection_error', { message: 'Failed to start conversation' });
+        }
+      });
+
+      // Officer accepts invite to join a user's room
+      socket.on('amer_accept_invite', (data) => {
+        try {
+          const { roomId } = data || {};
+          if (!roomId || !this.chatRooms.has(roomId)) {
+            return socket.emit('amer_connection_error', { message: 'Invalid room' });
+          }
+          const room = this.chatRooms.get(roomId);
+          // Ensure this socket is an officer
+          const officerId = socket.userId;
+          const officerRecord = this.connectedOfficers.get(officerId);
+          if (!officerRecord) {
+            return socket.emit('amer_connection_error', { message: 'Officer not available' });
+          }
+          // Join officer to room
+          socket.join(roomId);
+          room.officerId = officerId;
+          room.status = 'active';
+          room.lastActivity = new Date();
+          this.chatRooms.set(roomId, room);
+          // Notify both parties
+          this.io.to(roomId).emit('amer_connected', {
+            roomId,
+            officerName: socket.userData?.name || 'Amer Officer'
+          });
+
+          // Send room snapshot to officer (history)
+          this.io.to(socket.id).emit('room_snapshot', {
+            roomId,
+            messages: room.messages || []
+          });
+        } catch (error) {
+          console.error('Error accepting Amer invite:', error);
+          socket.emit('amer_connection_error', { message: 'Failed to accept invite' });
+        }
       });
 
       // Handle user joining chat room
@@ -230,7 +395,7 @@ class WebSocketServer {
         sender: userId,
         timestamp: new Date(),
         status: 'sent',
-        metadata: message.metadata || {}
+        metadata: { ...(message.metadata || {}), roomId }
       };
 
       // Update room activity
@@ -263,6 +428,7 @@ class WebSocketServer {
     try {
       socket.to(roomId).emit('user_typing', {
         userId,
+        roomId,
         isTyping: true,
         timestamp: new Date()
       });
@@ -277,6 +443,7 @@ class WebSocketServer {
     try {
       socket.to(roomId).emit('user_typing', {
         userId,
+        roomId,
         isTyping: false,
         timestamp: new Date()
       });
@@ -312,6 +479,7 @@ class WebSocketServer {
         timestamp: new Date(),
         status: 'sent',
         metadata: {
+          roomId,
           fileUrl,
           fileName,
           fileSize
@@ -482,7 +650,8 @@ class WebSocketServer {
         this.connectedOfficers.set(officerId, {
           socketId: socket.id,
           status,
-          lastUpdate: new Date()
+          lastUpdate: new Date(),
+          userId: officerId
         });
       } else {
         this.connectedOfficers.delete(officerId);
@@ -532,7 +701,7 @@ class WebSocketServer {
       this.connectedUsers.delete(userId);
 
       // Remove from connected officers if applicable
-      if (socket.userType === 'officer') {
+      if (socket.userType === 'officer' || socket.userData?.role === 'amer') {
         this.connectedOfficers.delete(userId);
       }
 
@@ -576,6 +745,72 @@ class WebSocketServer {
 
   broadcastToAll(event, data) {
     this.io.emit(event, data);
+  }
+
+  handleAmerConnection(socket, service) {
+    try {
+      // Find available Amer officer
+      const availableOfficer = Array.from(this.connectedOfficers.values())
+        .find(officer => officer.status === 'available');
+
+      if (availableOfficer) {
+        // Create a unique room ID
+        const roomId = `amer_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+        // Add room to chat rooms
+        this.chatRooms.set(roomId, {
+          id: roomId,
+          userId: socket.userId,
+          officerId: availableOfficer.userId,
+          service,
+          status: 'active',
+          createdAt: new Date(),
+          lastActivity: new Date(),
+          messages: []
+        });
+
+        // Update officer status
+        availableOfficer.status = 'busy';
+        availableOfficer.currentRoom = roomId;
+        this.connectedOfficers.set(availableOfficer.userId, availableOfficer);
+
+        // Join only the user now; officer will join on accept
+        socket.join(roomId);
+
+        // Do NOT emit amer_connected yet; wait for officer to accept invite
+
+        const invitePayload = {
+          roomId,
+          userId: socket.userId,
+          userName: socket.userData?.name,
+          service
+        };
+        this.io.to(availableOfficer.socketId).emit('new_application', invitePayload);
+        this.io.to(availableOfficer.socketId).emit('amer_invite', invitePayload);
+
+        // Add system message to chat
+        const systemMessage = {
+          id: Date.now().toString(),
+          type: 'system',
+          content: 'Connected to Amer Officer. You can now discuss your application directly.',
+          timestamp: new Date()
+        };
+
+        this.chatRooms.get(roomId).messages.push(systemMessage);
+        this.io.to(roomId).emit('new_message', { ...systemMessage, metadata: { roomId } });
+
+      } else {
+        // No officers available
+        socket.emit('amer_unavailable', {
+          message: 'All Amer officers are currently busy. Please try again later or continue with AI assistance.'
+        });
+      }
+    } catch (error) {
+      console.error('Error connecting to Amer officer:', error);
+      socket.emit('amer_connection_error', {
+        message: 'Failed to connect to Amer officer'
+      });
+    }
   }
 }
 

@@ -52,10 +52,18 @@ const visaRoutes = require('./controllers/visa/_routes');
 const authRoutes = require('./controllers/auth/_routes');
 const chatRoutes = require('./controllers/chat/_routes');
 const servicesRoutes = require('./controllers/services/_routes');
+const notificationsRoutes = require('./controllers/notifications/_routes');
+const dependentsRoutes = require('./controllers/dependents/_routes');
+const paymentsRoutes = require('./controllers/payments/_routes');
+const adminRoutes = require('./controllers/admin/_routes');
 app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/visa', visaRoutes);
 app.use('/api/v1/chat', chatRoutes);
 app.use('/api/v1/services', servicesRoutes);
+app.use('/api/v1/notifications', notificationsRoutes);
+app.use('/api/v1/dependents', dependentsRoutes);
+app.use('/api/v1/services/payments', paymentsRoutes);
+app.use('/api/v1/admin', adminRoutes);
 
 // Chat WebSocket routes
 const { router: chatWebSocketRoutes, setupWebSocket } = require('./routes/chat');

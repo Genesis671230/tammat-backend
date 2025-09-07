@@ -14,14 +14,9 @@ const fileRefSchema = new mongoose.Schema({
 
 const userSchema = new mongoose.Schema({
   // Clerk linkage
-  clerkId: { type: String, index: true },
+  // clerkId: { type: String, index: true },
 
-  // Basic Information
-  employeeId: {
-    type: String,
-    // required: true,
-    unique: true
-  },
+
   firstName: {
     type: String,
     required: [true, 'First name is required']
@@ -52,57 +47,59 @@ const userSchema = new mongoose.Schema({
   },
   password: {
     type: String,
-    required: function() { return !this.clerkId; },
+    // required: function() { return !this.clerkId; },
     minlength: [6, 'Password must be at least 6 characters']
   },
 
   // Role & Department
   role: {
     type: String,
-    enum: ['admin', 'user', 'manager', 'sponsor', 'sponsored', 'amer'],
     default: 'user'
   },
+  status: {
+    type: String,
+    enum: ['active', 'frozen', 'blocked'],
+    default: 'active',
+    index: true
+  },
+  
+    // Password Reset Fields
+    resetToken: String,
+    resetTokenExpires: Date,
+    
+    // One-Time Password (OTP) fields
+    otpCode: String,
+    otpExpires: Date,
+  
+    // Additional Fields for Amer Officers
+    passportNumber: String,
+    company: String,
+    country: String,
+    // Documents & Profile
+    profilePicture: fileRefSchema,
+    documents: [documentSchema],
+    dependents: [new mongoose.Schema({
+      firstName: String,
+      lastName: String,
+      relationship: { type: String, enum: ['spouse','child','parent','other'] },
+      passportNumber: String,
+      nationality: String,
+      dateOfBirth: Date,
+      email: String,
+      phoneNumber: String,
+    }, { _id: true, timestamps: true })],
   lastLogin: Date,
   deleted: {
     type: Boolean,
     default: false
   },
-
-  // Documents & Profile
-  profilePicture: fileRefSchema,
-  documents: [documentSchema],
-
-  // Entry Tracking
-  entries: [{
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'ServiceEntryData'
-  }],
-  entryCount: {
-    type: Number,
-    default: 0
-  },
-  lastEntryDate: {
-    type: Date
-  }
+  
 }, {
   timestamps: true,
-  toJSON: { virtuals: true },
-  toObject: { virtuals: true }
 });
 
-// Virtual for entry statistics
-userSchema.virtual('entryStats').get(function() {
-  return {
-    total: this.entryCount,
-    lastSubmission: this.lastEntryDate
-  };
-});
 
-// Pre-save middleware to update fullName
-userSchema.pre('save', function(next) {
-  this.fullName = `${this.firstName} ${this.lastName}`;
-  next();
-});
+
 
 const User = mongoose.model('User', userSchema);
 module.exports = User;

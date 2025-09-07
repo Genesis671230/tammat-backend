@@ -34,7 +34,8 @@ const entitySchema = new mongoose.Schema({
     type: String,
     enum: [
       'order', 'payment', 'allocation', 'token', 'claim', 'kyc', 'investor', 
-      'spv', 'distribution', 'corporate_action', 'compliance_rule', 'user', 'system'
+      'spv', 'distribution', 'corporate_action', 'compliance_rule', 'user', 'system',
+      'visa_application', 'notification'
     ],
     required: true
   },
