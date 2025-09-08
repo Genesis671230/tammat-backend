@@ -20,7 +20,7 @@ const visaApplicationSchema = new mongoose.Schema({
     index: true
   },
 
-  // Sponsor Information
+  // Sponsor Information - Only userId required, Amer officer will collect other data
   sponsor: {
     userId: {
       type: mongoose.Schema.ObjectId,
@@ -28,53 +28,53 @@ const visaApplicationSchema = new mongoose.Schema({
       required: [true, 'Sponsor user ID is required']
     },
     firstName: {
-      type: String,
-      required: [true, 'Sponsor first name is required']
+      type: String
+      // Removed required - Amer officer will collect this data
     },
     lastName: {
-      type: String,
-      required: [true, 'Sponsor last name is required']
+      type: String
+      // Removed required - Amer officer will collect this data
     },
     email: {
-      type: String,
-      required: [true, 'Sponsor email is required']
+      type: String
+      // Removed required - Amer officer will collect this data
     },
     phone: {
-      type: String,
-      required: [true, 'Sponsor phone number is required']
+      type: String
+      // Removed required - Amer officer will collect this data
     },
     emiratesId: {
-      type: String,
-      required: [true, 'Sponsor Emirates ID is required']
+      type: String
+      // Removed required - Amer officer will collect this data
     }
   },
 
-  // Sponsored Person Information
+  // Sponsored Person Information - All optional, Amer officer will collect data
   sponsored: {
     firstName: {
-      type: String,
-      required: [true, 'Sponsored person first name is required']
+      type: String
+      // Removed required - Amer officer will collect this data
     },
     lastName: {
-      type: String,
-      required: [true, 'Sponsored person last name is required']
+      type: String
+      // Removed required - Amer officer will collect this data
     },
     dateOfBirth: {
-      type: Date,
-      required: [true, 'Sponsored person date of birth is required']
+      type: Date
+      // Removed required - Amer officer will collect this data
     },
     nationality: {
-      type: String,
-      required: [true, 'Sponsored person nationality is required']
+      type: String
+      // Removed required - Amer officer will collect this data
     },
     passportNumber: {
-      type: String,
-      required: [true, 'Sponsored person passport number is required']
+      type: String
+      // Removed required - Amer officer will collect this data
     },
     relationship: {
       type: String,
-      required: [true, 'Relationship to sponsor is required'],
       enum: ['spouse', 'child', 'parent', 'other']
+      // Removed required - Amer officer will collect this data
     },
     occupation: String,
     income: Number
@@ -289,7 +289,13 @@ visaApplicationSchema.pre('save', function(next) {
 
 // Instance methods
 visaApplicationSchema.methods.isComplete = function() {
+  // Simplified completion check - only requires document uploads
   return this.status !== 'draft' && this.attachments.length > 0;
+};
+
+visaApplicationSchema.methods.canSubmit = function() {
+  // Application can be submitted with just documents - Amer officer will collect other data
+  return this.attachments.length > 0;
 };
 
 visaApplicationSchema.methods.addComment = function(userId, comment) {

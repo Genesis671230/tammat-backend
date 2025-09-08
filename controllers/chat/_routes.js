@@ -5,6 +5,7 @@ const auth = require('../../middelwares/auth');
 
 // Process chat messages through OpenAI
 router.post('/process', auth, chatController.processMessage);
+router.post('/stream', auth, chatController.streamMessage);
 router.post('/upload', auth, chatController.chatUploadMiddleware, chatController.uploadChatFile);
 
 module.exports = router;

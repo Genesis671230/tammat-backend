@@ -110,8 +110,9 @@ if (require.main === module) {
 	// Initialize WebSocket server
 	const wsServer = new WebSocketServer(server);
 
-	// Setup chat WebSocket functionality
-	setupWebSocket(wsServer.io);
+	// Setup chat WebSocket functionality using our chat controller
+	const { handleWebSocket } = require('./controllers/chat/chatController');
+	handleWebSocket(wsServer.io);
 
 	// Make WebSocket server available in app context
 	app.set('wsServer', wsServer);
