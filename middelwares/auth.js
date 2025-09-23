@@ -15,8 +15,11 @@ const auth = (req, res, next) => {
     const secret = process.env.JWT_SECRET || "your-secret-key-change-in-production";
     const decoded = jwt.verify(token, secret);
     req.user = decoded;
+    req.user._id = decoded.userId;
+    console.log(decoded,"here is decoded");
     next();
   } catch (err) {
+    console.log(err,"here is error");
     return res.status(401).json({ 
       success: false,
       message: "Authentication failed. Invalid token." 

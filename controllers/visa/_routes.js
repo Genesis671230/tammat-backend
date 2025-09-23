@@ -11,20 +11,25 @@ router.use(auth);
 router.get('/applications', auth.requireRole('amer', 'admin'), visaApplicationController.getAllApplications);
 router.get('/stats', auth.requireRole('amer', 'admin'), visaApplicationController.getStats);
 router.get('/applications/:email', visaApplicationController.getApplicationsByUserId);
+router.get('/applications/user/:userId', visaApplicationController.getApplicationsByUserObjectId);
 // Aliases to match frontend hook conventions
 router.put('/applications/:applicationId/status', auth.requireRole('amer', 'admin'), visaApplicationController.updateApplicationStatus);
 router.post('/applications/:applicationId/fraud-alert', auth.requireRole('amer', 'admin'), visaApplicationController.addFraudAlert);
 router.post('/applications/:applicationId/penalty', auth.requireRole('amer', 'admin'), visaApplicationController.issuePenalty);
 router.post('/applications/:applicationId/stage', auth.requireRole('amer', 'admin'), visaApplicationController.setGovStage);
+router.patch('/applications/:applicationId/details', auth.requireRole('amer', 'admin'), visaApplicationController.updateApplicationDetails);
 
 // Routes accessible by all authenticated users
-router.post('/', visaApplicationController.createApplication);
+router.post('/',auth, visaApplicationController.createApplication);
 router.get('/my-applications', visaApplicationController.getMyApplications);
-router.post('/:applicationId/documents', visaApplicationController.uploadApplicationFiles, visaApplicationController.uploadDocuments);
-router.post('/:applicationId/comments', visaApplicationController.addComment);
-// Amer: request additional documents
+// Amer: request additional documents (must come before /:applicationId)
 router.post('/:applicationId/request-documents', auth.requireRole('amer', 'admin'), visaApplicationController.requestDocuments);
+router.post('/:applicationId/otp', auth.requireRole('amer', 'admin'), visaApplicationController.requestOTP);
 router.post('/:applicationId/attachments/:attachmentId/review', auth.requireRole('amer', 'admin'), visaApplicationController.reviewAttachment);
+router.get('/:applicationId/attachments/:attachmentId/download', visaApplicationController.downloadAttachment);
+router.post('/:applicationId/documents',auth, visaApplicationController.uploadApplicationFiles, visaApplicationController.uploadDocuments);
+router.put('/:applicationId/documents',auth, visaApplicationController.uploadApplicationFiles, visaApplicationController.uploadDocuments);
+router.post('/:applicationId/comments', visaApplicationController.addComment);
 router.get('/:applicationId', visaApplicationController.getApplication);
 
 // Legacy officer/admin routes (kept for compatibility)

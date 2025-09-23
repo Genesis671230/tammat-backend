@@ -5,7 +5,103 @@ const visaApplicationSchema = new mongoose.Schema({
   applicationType: {
     type: String,
     required: [true, 'Application type is required'],
-    enum: ['family_visa_spouse', 'family_visa_child', 'residence_visa', 'entry_permit', 'emirates_id', 'visa_renewal', 'medical', 'change_status', 'visa_stamping']
+    enum: [
+      // New Entry Permits
+      'son_daughter_residence_visa',
+      'spouse_residence_visa',
+      'parents_residence_visa',
+      'investor_partner_visa',
+      'entry_permit_short_term_visit_parents_siblings_inlaws',
+      'entry_permit_short_term_visit_spouse_kids',
+      'entry_permit_long_term_visit_parents_siblings_inlaws',
+      'entry_permit_long_term_visit_spouse_kids',
+      
+      // Change Status
+      'change_status_family',
+      'change_status_employee',
+      'change_status_visit_visa',
+      
+      // Visa Stamping
+      'spouse_children_visa_stamping',
+      'parents_visa_stamping',
+      'employee_visa_stamping',
+      'son_daughter_visa_stamping',
+      'partner_investor_visa_stamping_2_years',
+      
+      // Residence Visa Renewal
+      'spouse_children_visa_renewal',
+      'son_above_18_visa_renewal',
+      'partner_investor_visa_renewal_2_years',
+      'parents_visa_renewal_1_year',
+      
+      // Cancellation
+      'family_residence_visa_cancellation',
+      'employment_visa_cancellation',
+      'partner_investor_visa_cancellation',
+      'cancellation_entry_permit_before_entry_company',
+      'cancellation_entry_permit_after_entry_family',
+      'cancellation_entry_permit_after_entry_company',
+      
+      // Newborn & Employment
+      'new_born_residence_visa',
+      'employment_visa',
+      
+      // Golden Visa
+      'golden_visa_commercial_investor',
+      'golden_visa_director_manager',
+      'golden_visa_doctors',
+      'golden_visa_engineers',
+      'golden_visa_new_born_baby',
+      'golden_visa_phd_holder',
+      'golden_visa_scientists',
+      'golden_visa_family_members',
+      'golden_visa_commercial_investor_2m_deposit',
+      'golden_visa_outstanding_student_highschool',
+      'golden_visa_outstanding_student_university',
+      'golden_visa_creative_people_culture_art',
+      
+      // Establishment Card
+      'new_establishment_card_with_online',
+      'new_establishment_card_without_online',
+      'renewal_establishment_card_with_online',
+      'renewal_establishment_card_without_online',
+      'immigration_employee_list',
+      'modification_immigration_card',
+      
+      // Holding Visa
+      'holding_visa_family',
+      
+      // Data Modification
+      'data_modification_family',
+      'data_modification_company',
+      
+      // PRO Card
+      'new_pro_card',
+      'renewal_pro_card',
+      'modify_pro_card',
+      'reconsideration_rejected_visa_application',
+      
+      // Visa Extension
+      'family_visit_visa_extend',
+      
+      // Travel Report
+      'travel_report_family',
+      'travel_report_company',
+      
+      // Security Deposit
+      'security_deposit',
+      
+      // Legacy (for backward compatibility)
+      'family_visa_spouse',
+      'family_visa_child',
+      'residence_visa',
+      'entry_permit',
+      'emirates_id',
+      'visa_renewal',
+      'medical',
+      'change_status',
+      'visa_stamping'
+    ]
   },
   status: {
     type: String,
@@ -85,22 +181,26 @@ const visaApplicationSchema = new mongoose.Schema({
     type: {
       type: String,
       required: true,
-      enum: [
-        'sponsor_visa',
-        'sponsor_emirates_id',
-        'sponsor_passport',
-        'sponsor_salary_certificate',
-        'sponsor_trade_license',
-        'sponsor_establishment_card',
-        'sponsored_passport_front',
-        'sponsored_passport_back',
-        'sponsored_photo',
-        'marriage_certificate',
-        'birth_certificate',
-        'medical_certificate',
-        'police_clearance',
-        'other'
-      ]
+      // enum: [
+      //   'sponsor_visa',
+      //   'sponsor_emirates_id',
+      //   'sponsor_passport',
+      //   'sponsor_salary_certificate',
+      //   'sponsor_trade_license',
+      //   'sponsor_establishment_card',
+      //   'sponsored_passport_front',
+      //   'sponsored_passport_back',
+      //   'sponsored_photo',
+      //   'marriage_certificate',
+      //   'birth_certificate',
+      //   'medical_certificate',
+      //   'police_clearance',
+      //   'other'
+      // ]
+    },
+    label: {
+      type: String,
+      // required: true
     },
     path: {
       type: String,
@@ -186,6 +286,10 @@ const visaApplicationSchema = new mongoose.Schema({
     },
     govStage: { type: String, enum: ['draft','mohre_pending','gdrfa_pending','icp_pending','printing','completed'], default: 'draft' },
     requiredDocuments: [{ type: String }],
+    // Service information from services.json
+    serviceId: { type: String },
+    serviceName: { type: String },
+    serviceRequirements: [{ type: String }],
     chatHistory: [{
       type: {
         type: String,

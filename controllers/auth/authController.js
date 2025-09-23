@@ -423,21 +423,8 @@ class AuthController {
 
       res.status(200).json({
         success: true,
-        data: {
-          user: {
-            id: user._id,
-            firstName: user.firstName,
-            lastName: user.lastName,
-            email: user.email,
-            role: user.role,
-            phoneNumber: user.phoneNumber,
-            country: user.country,
-            lastLogin: user.lastLogin,
-            createdAt: user.createdAt,
-            updatedAt: user.updatedAt
-          }
-        }
-      });
+        data: {user:user}
+        });
 
     } catch (error) {
       console.error('Get profile error:', error);
