@@ -599,7 +599,7 @@ exports.requestDocuments = catchAsync(async (req, res, next) => {
     return next(new AppError('You are not authorized to request documents', 403));
   }
 
-  const { requested = [], note } = req.body || {};
+  const { requested = [], note, deadline } = req.body || {};
   const application = await VisaApplication.findById(req.params.applicationId);
   if (!application) {
     return next(new AppError('No application found with that ID', 404));
@@ -607,7 +607,24 @@ exports.requestDocuments = catchAsync(async (req, res, next) => {
 
   application.status = 'docs_required';
 
-  const content = `[Doc Request] ${Array.isArray(requested) ? requested.join(', ') : String(requested)}${note ? ' — ' + note : ''}`;
+  // Add to requestedDocuments array
+  if (!application.requestedDocuments) {
+    application.requestedDocuments = [];
+  }
+
+  const requestedDocs = Array.isArray(requested) ? requested : [requested];
+  requestedDocs.forEach(docType => {
+    application.requestedDocuments.push({
+      documentType: docType,
+      description: note,
+      requestedAt: new Date(),
+      requestedBy: req.user._id,
+      deadline: deadline ? new Date(deadline) : undefined,
+      status: 'pending'
+    });
+  });
+
+  const content = `[Doc Request] ${requestedDocs.join(', ')}${note ? ' — ' + note : ''}`;
   application.metadata.chatHistory.push({
     type: 'amer',
     content,
@@ -620,6 +637,7 @@ exports.requestDocuments = catchAsync(async (req, res, next) => {
     at: new Date()
   });
   await application.save();
+  
   try {
     await AuditLog.createEntry({
       action: 'OTHER',
@@ -635,13 +653,17 @@ exports.requestDocuments = catchAsync(async (req, res, next) => {
     const app = require('../../index');
     const wsServer = app.get('wsServer');
     const sponsorId = application.sponsor.userId?.toString?.() || application.sponsor.userId;
-    wsServer?.sendToUser(sponsorId, 'notification', {
+    
+    // Send WebSocket notification with document_requested event
+    wsServer?.sendToUser(sponsorId, 'document_requested', {
       type: 'warning',
       message: 'Additional documents requested for your application.',
       applicationId: application._id.toString(),
       timestamp: new Date(),
-      requested
+      requestedDocuments: requestedDocs,
+      note: note
     });
+    
     // Persist notification
     await Notification.create({
       userId: sponsorId,
@@ -649,15 +671,16 @@ exports.requestDocuments = catchAsync(async (req, res, next) => {
       type: 'docs_required',
       title: 'Documents Required',
       message: note ? `${note}` : 'Additional documents requested for your application.',
-      metadata: { requested }
+      metadata: { requested: requestedDocs, deadline }
     });
   } catch (e) {
+    console.error('WebSocket notification error:', e);
     // non-blocking
   }
 
   res.status(200).json({
     status: 'success',
-    data: { application }
+    data: { application, requestedDocuments: requestedDocs }
   });
 });
 
@@ -972,7 +995,7 @@ exports.requestOTP = catchAsync(async (req, res, next) => {
     return next(new AppError('You are not authorized to request OTP', 403));
   }
 
-  const { phone, minutes = 5 } = req.body;
+  const { phone, minutes = 5, purpose = 'verification' } = req.body;
   const applicationId = req.params.applicationId;
   
   const application = await VisaApplication.findById(applicationId);
@@ -984,35 +1007,216 @@ exports.requestOTP = catchAsync(async (req, res, next) => {
   const otp = Math.floor(100000 + Math.random() * 900000).toString();
   const expiresAt = new Date(Date.now() + minutes * 60 * 1000);
 
-  // Store OTP in application metadata
-  application.metadata.otp = {
-    code: otp,
+  // Store OTP in otpRequests array
+  const otpRequest = {
     phone: phone,
-    expiresAt: expiresAt,
+    code: otp,
+    purpose: purpose,
+    requestedAt: new Date(),
     requestedBy: req.user._id,
-    requestedAt: new Date()
+    expiresAt: expiresAt,
+    status: 'pending'
   };
+
+  if (!application.otpRequests) {
+    application.otpRequests = [];
+  }
+  application.otpRequests.push(otpRequest);
+
+  // Add to history
+  application.history.push({
+    action: 'otp_requested',
+    by: req.user._id.toString(),
+    note: `OTP requested for ${phone}`,
+    at: new Date()
+  });
 
   await application.save();
 
   // In production, send SMS here
   console.log(`OTP for ${phone}: ${otp} (expires in ${minutes} minutes)`);
 
-  // Add to chat history
-  application.metadata.chatHistory.push({
-    type: 'amer',
-    content: `OTP sent to ${phone}. Code: ${otp} (expires in ${minutes} minutes)`,
-    userId: req.user._id
-  });
+  // Send WebSocket notification to user
+  try {
+    const app = require('../../index');
+    const wsServer = app.get('wsServer');
+    const sponsorId = application.sponsor.userId?.toString?.() || application.sponsor.userId;
+    
+    wsServer?.sendToUser(sponsorId, 'otp_requested', {
+      type: 'otp_request',
+      message: `OTP verification requested for ${phone}`,
+      applicationId: application._id.toString(),
+      phone: phone,
+      expiresIn: minutes,
+      timestamp: new Date()
+    });
 
-  await application.save();
+    // Create notification
+    await Notification.create({
+      userId: sponsorId,
+      applicationId: application._id,
+      type: 'otp_request',
+      title: 'OTP Verification Requested',
+      message: `Please verify OTP sent to ${phone}`,
+      metadata: { phone, expiresIn: minutes }
+    });
+  } catch (e) {
+    console.error('WebSocket notification error:', e);
+    // non-blocking
+  }
 
   res.status(200).json({
     status: 'success',
     data: {
       message: 'OTP sent successfully',
       phone: phone,
-      expiresIn: minutes
+      expiresIn: minutes,
+      otpRequest: otpRequest
+    }
+  });
+});
+
+// Priority Boost
+exports.priorityBoost = catchAsync(async (req, res, next) => {
+  const applicationId = req.params.applicationId;
+  const { type, amount } = req.body; // type: 'free' or 'paid'
+  
+  const application = await VisaApplication.findById(applicationId);
+  if (!application) {
+    return next(new AppError('Application not found', 404));
+  }
+
+  // Check authorization
+  const userId = req.user?.userId || req.user?._id?.toString();
+  const sponsorId = application.sponsor.userId?.toString?.() || application.sponsor.userId;
+  if (userId !== sponsorId && req.user.role !== 'admin') {
+    return next(new AppError('You are not authorized to boost this application', 403));
+  }
+
+  // Initialize boost count if not exists
+  if (!application.metadata.boostCount) {
+    application.metadata.boostCount = 0;
+  }
+
+  // Validate boost type
+  if (type === 'free') {
+    if (application.metadata.boostCount >= 3) {
+      return next(new AppError('All free boosts have been used. Please use paid boost.', 400));
+    }
+    application.metadata.boostCount += 1;
+  } else if (type === 'paid') {
+    if (!amount || amount < 10) {
+      return next(new AppError('Payment amount must be at least AED 10', 400));
+    }
+    // In production, integrate with payment gateway here
+    // For now, we'll just mark as paid
+    application.metadata.paidBoosts = (application.metadata.paidBoosts || 0) + 1;
+  } else {
+    return next(new AppError('Invalid boost type. Use "free" or "paid"', 400));
+  }
+
+  // Update priority
+  application.metadata.priority = 'urgent';
+  application.metadata.lastBoostDate = new Date();
+
+  // Add to history
+  application.history.push({
+    action: type === 'free' ? 'free_boost_activated' : 'paid_boost_activated',
+    at: new Date(),
+    by: req.user._id,
+    note: type === 'free' 
+      ? `Free boost activated (${application.metadata.boostCount}/3)` 
+      : `Paid boost activated (AED ${amount})`
+  });
+
+  await application.save();
+
+  // Send notification
+  try {
+    await Notification.create({
+      user: application.sponsor.userId,
+      type: 'info',
+      message: `Your application has been boosted to priority status`,
+      data: { applicationId: application._id }
+    });
+  } catch (e) {
+    // non-blocking
+  }
+
+  res.status(200).json({
+    status: 'success',
+    data: {
+      application,
+      message: type === 'free' 
+        ? `Priority boost activated! ${3 - application.metadata.boostCount} free boost(s) remaining` 
+        : 'Paid priority boost activated!'
+    }
+  });
+});
+
+// Upload additional documents (for applicants)
+exports.uploadAdditionalDocument = catchAsync(async (req, res, next) => {
+  const applicationId = req.params.applicationId;
+  const application = await VisaApplication.findById(applicationId);
+  
+  if (!application) {
+    return next(new AppError('Application not found', 404));
+  }
+
+  // Check authorization
+  const userId = req.user?.userId || req.user?._id?.toString();
+  const sponsorId = application.sponsor.userId?.toString?.() || application.sponsor.userId;
+  if (userId !== sponsorId && req.user.role !== 'admin') {
+    return next(new AppError('You are not authorized to upload documents for this application', 403));
+  }
+
+  if (!req.files || req.files.length === 0) {
+    return next(new AppError('No files provided', 400));
+  }
+
+  const uploadedDocs = [];
+  for (const file of req.files) {
+    const doc = {
+      type: req.body.type || 'additional_document',
+      filename: file.filename,
+      originalName: file.originalname,
+      path: file.path.replace(/\\/g, '/'),
+      mimeType: file.mimetype,
+      fileSize: file.size,
+      uploadedAt: new Date(),
+      uploadedBy: req.user._id,
+      status: 'pending_review'
+    };
+    application.attachments.push(doc);
+    uploadedDocs.push(doc);
+  }
+
+  // Add to history
+  application.history.push({
+    action: 'additional_documents_uploaded',
+    at: new Date(),
+    by: req.user._id,
+    note: `${uploadedDocs.length} additional document(s) uploaded`
+  });
+
+  await application.save();
+
+  // Notify Amer officers
+  try {
+    const wsServer = req.app.get('wsServer');
+    wsServer?.broadcast('amer', 'document_uploaded', {
+      applicationId: application._id,
+      documentsCount: uploadedDocs.length
+    });
+  } catch (e) {
+    // non-blocking
+  }
+
+  res.status(200).json({
+    status: 'success',
+    data: {
+      documents: uploadedDocs,
+      message: 'Documents uploaded successfully'
     }
   });
 });

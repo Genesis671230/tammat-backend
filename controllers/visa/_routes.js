@@ -32,6 +32,9 @@ router.get('/:applicationId/result-documents/:attachmentId/download', visaApplic
 router.post('/:applicationId/documents',auth, visaApplicationController.uploadApplicationFiles, visaApplicationController.uploadDocuments);
 router.put('/:applicationId/documents',auth, visaApplicationController.uploadApplicationFiles, visaApplicationController.uploadDocuments);
 router.post('/:applicationId/comments', visaApplicationController.addComment);
+// Priority boost and additional documents
+router.post('/:applicationId/boost', visaApplicationController.priorityBoost);
+router.post('/:applicationId/attachments/upload', visaApplicationController.uploadApplicationFiles, visaApplicationController.uploadAdditionalDocument);
 router.get('/:applicationId', visaApplicationController.getApplication);
 
 // Legacy officer/admin routes (kept for compatibility)

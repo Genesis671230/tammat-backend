@@ -409,6 +409,99 @@ const visaApplicationSchema = new mongoose.Schema({
     },
     paidAt: Date,
     paymentReference: String
+  }],
+
+  // Payments (application fees, priority boosts, etc.)
+  payments: [{
+    type: {
+      type: String,
+      enum: ['application_fee', 'priority_boost', 'additional_service', 'government_fee', 'other'],
+      required: true
+    },
+    amount: {
+      type: Number,
+      required: true
+    },
+    currency: {
+      type: String,
+      default: 'AED'
+    },
+    description: String,
+    status: {
+      type: String,
+      enum: ['pending', 'completed', 'failed', 'refunded'],
+      default: 'pending'
+    },
+    paymentMethod: {
+      type: String,
+      enum: ['card', 'bank_transfer', 'cash', 'wallet', 'other']
+    },
+    transactionId: String,
+    receiptUrl: String,
+    paidAt: {
+      type: Date,
+      default: Date.now
+    },
+    paidBy: {
+      type: mongoose.Schema.ObjectId,
+      ref: 'User'
+    },
+    metadata: {
+      type: mongoose.Schema.Types.Mixed
+    }
+  }],
+
+  // Requested Documents (documents requested by Amer officers)
+  requestedDocuments: [{
+    documentType: {
+      type: String,
+      required: true
+    },
+    description: String,
+    requestedAt: {
+      type: Date,
+      default: Date.now
+    },
+    requestedBy: {
+      type: mongoose.Schema.ObjectId,
+      ref: 'User'
+    },
+    deadline: Date,
+    status: {
+      type: String,
+      enum: ['pending', 'uploaded', 'approved'],
+      default: 'pending'
+    },
+    uploadedDocumentId: mongoose.Schema.ObjectId,
+    uploadedAt: Date
+  }],
+
+  // OTP Requests (for verification purposes)
+  otpRequests: [{
+    phone: {
+      type: String,
+      required: true
+    },
+    code: String,
+    purpose: {
+      type: String,
+      default: 'verification'
+    },
+    requestedAt: {
+      type: Date,
+      default: Date.now
+    },
+    requestedBy: {
+      type: mongoose.Schema.ObjectId,
+      ref: 'User'
+    },
+    expiresAt: Date,
+    verifiedAt: Date,
+    status: {
+      type: String,
+      enum: ['pending', 'verified', 'expired', 'failed'],
+      default: 'pending'
+    }
   }]
 }, {
   timestamps: true,
