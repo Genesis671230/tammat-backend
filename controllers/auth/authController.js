@@ -4,7 +4,7 @@ const User = require('../../model/schema/user');
 const { createClient } = require('@supabase/supabase-js');
 const { sendSMS } = require('../../utills/smsJs');
 require("dotenv").config();
-
+const { sendMail } = require('../../utills/sendGridEmail');
 // Initialize Supabase client
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_ANON_KEY;
@@ -221,11 +221,24 @@ class AuthController {
       user.resetToken = resetToken;
       user.resetTokenExpires = new Date(Date.now() + 3600000); // 1 hour
       await user.save();
-
+      console.log("sendMail: ", user);
       // TODO: Send email with reset link
       // For now, just return success
       // In production, you would integrate with an email service like SendGrid, Nodemailer, etc.
-
+      await sendMail({
+        to: email,
+        subject: 'Password Reset Link',
+        template_id: process.env.SENDGRID_TEMPLATE_ID_FORGOT_PASSWORD,
+        dynamic_data: {
+          preheader: 'Reset your password link expires in 1 hour',
+          company_name: 'TMMET Technologies',
+          user_name: user.firstName + ' ' + user.lastName || 'User',
+          user_email: user.email,
+          reset_link: process.env.FRONTEND_URL + '/reset-password?token=' + resetToken,
+          support_email: 'support@tmmet.com',
+          year: new Date().getFullYear()
+        }
+      });
       res.status(200).json({
         success: true,
         message: 'Password reset link sent to your email'

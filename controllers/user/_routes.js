@@ -14,6 +14,20 @@ router.delete("/deleteMany", auth, user.deleteMany);
 router.get("/:id/entries", auth, user.getUserEntries);
 router.get("/:id/stats", auth, user.getUserStats);
 
+// Profile management routes
+router.get("/:id/profile", auth, user.getUserProfile);
+router.put("/:id/profile", auth, user.updateUserProfile);
+
+// Compliance routes
+router.get("/:id/compliance", auth, user.getComplianceStatus);
+
+// Business management routes
+router.put("/:id/business", auth, user.updateBusinessInfo);
+
+// Document management routes
+router.post("/:id/documents/upload", auth, user.upload.single('document'), user.updateUserDocuments);
+router.delete("/:id/documents/:documentId", auth, user.deleteUserDocument);
+
 router.post("/login", user.login);
 router.post("/admin-register", user.adminRegister);
 

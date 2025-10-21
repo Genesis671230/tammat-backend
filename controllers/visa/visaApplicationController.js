@@ -771,6 +771,45 @@ exports.setGovStage = catchAsync(async (req, res, next) => {
   res.json({ status: 'success', data: { application } });
 });
 
+exports.downloadResultDocument = catchAsync(async (req, res, next) => {
+  const { applicationId, attachmentId } = req.params;
+  const application = await VisaApplication.findById(applicationId);
+  if (!application) {
+    return next(new AppError('Application not found', 404));
+  }
+  const attachment = application.resultDocuments.id(attachmentId) || application.resultDocuments.find(a => String(a._id) === String(attachmentId));
+  if (!attachment) {
+    return next(new AppError('Attachment not found', 404));
+  }
+  const filePath = path.join(__dirname, '../../uploads/applications', applicationId, attachment.path);
+  await fs.access(filePath);
+  res.setHeader('Content-Disposition', `attachment; filename="${attachment.originalName}"`);
+  res.setHeader('Content-Type', attachment.mimeType);
+  res.setHeader('Content-Length', attachment.fileSize);
+  const fileStream = require('fs').createReadStream(filePath);
+  fileStream.pipe(res);
+  fileStream.on('error', (error) => {
+    console.error('File stream error:', error);
+    if (!res.headersSent) {
+      res.status(500).json({ status: 'error', message: 'Error streaming file' });
+    }
+  });
+});
+
+exports.downloadAnyDocument = catchAsync(async (req, res, next) => {
+  const { attachmentId } = req.params;
+  
+  const filePath = path.join(__dirname, '../../uploads/applications', attachmentId);
+  try {
+    await fs.access(filePath);
+  } catch (error) {
+    return next(new AppError('File not found on server', 404));
+  }
+  res.setHeader('Content-Disposition', `attachment; filename="document.pdf"`);
+  res.setHeader('Content-Type', 'application/pdf');
+  res.setHeader('Content-Length', 1000);
+  res.sendFile(filePath);
+});
 // Download document attachment
 exports.downloadAttachment = catchAsync(async (req, res, next) => {
   const { applicationId, attachmentId } = req.params;
@@ -788,9 +827,11 @@ exports.downloadAttachment = catchAsync(async (req, res, next) => {
   ) {
     return next(new AppError('You are not authorized to download this document', 403));
   }
-
-  const attachment = application.attachments.id(attachmentId) || 
-                   application.attachments.find(a => String(a._id) === String(attachmentId));
+  
+  const attachment = application.attachments.id(attachmentId)
+  || application.attachments.find(a => String(a._id) === String(attachmentId))
+  || application.resultDocuments.id(attachmentId)
+  || application.resultDocuments.find(a => String(a._id) === String(attachmentId))
   
   if (!attachment) {
     return next(new AppError('Attachment not found', 404));
@@ -819,6 +860,108 @@ exports.downloadAttachment = catchAsync(async (req, res, next) => {
     if (!res.headersSent) {
       res.status(500).json({ status: 'error', message: 'Error streaming file' });
     }
+  });
+});
+
+// Upload result documents (ICP receipts, transaction papers, etc.)
+exports.uploadResultDocuments = catchAsync(async (req, res, next) => {
+  // Only Amer officers can upload result documents
+  if (req.user.role !== 'amer' && req.user.role !== 'admin') {
+    return next(new AppError('You are not authorized to upload result documents', 403));
+  }
+
+  const application = await VisaApplication.findById(req.params.applicationId);
+  if (!application) {
+    return next(new AppError('No application found with that ID', 404));
+  }
+
+  const resultDocuments = [];
+
+  for (const file of req.files) {
+    const { documentName, documentType } = req.body;
+
+    let extractedData;
+    try {
+      const axios = require("axios");
+      const fsSync = require("fs");
+      const FormData = require("form-data");
+      const buf = fsSync.readFileSync(file.path);
+      const form = new FormData();
+      form.append("file", buf, { filename: file.originalname || "document" });
+      const ocrUrl = (process.env.DOC_OCR_URL || "http://localhost:8011") + "/extract-text";
+      const ocrRes = await axios.post(ocrUrl, form, {
+        headers: form.getHeaders(),
+        timeout: 10000,
+      });
+      if (ocrRes?.data?.text) {
+        extractedData = { text: String(ocrRes.data.text).slice(0, 2000) };
+      }
+    } catch (e) {
+      // non-blocking
+    }
+
+    resultDocuments.push({
+      type: documentType || 'other_result',
+      label: documentName || file.originalname,
+      path: file.path.replace(/^.*[\\\/]/, ""),
+      originalName: file.originalname,
+      fileSize: file.size,
+      mimeType: file.mimetype,
+      uploadedAt: new Date(),
+      uploadedBy: req.user._id,
+      extractedData
+    });
+  }
+
+  // Initialize resultDocuments array if it doesn't exist
+  if (!application.resultDocuments) {
+    application.resultDocuments = [];
+  }
+
+  application.resultDocuments.push(...resultDocuments);
+  
+  // Add to history
+  application.history.push({
+    action: 'result_documents_uploaded',
+    by: `${req.user.firstName || ''} ${req.user.lastName || ''}`.trim() || req.user.email,
+    note: `Uploaded ${resultDocuments.length} result document(s)`,
+    at: new Date()
+  });
+
+  await application.save();
+
+  // Notify sponsor
+  try {
+    await Notification.create({
+      userId: application.sponsor.userId,
+      applicationId: application._id,
+      type: 'result_available',
+      title: 'Application Results Available',
+      message: `${resultDocuments.length} result document(s) have been uploaded for your application.`,
+      metadata: { 
+        documentCount: resultDocuments.length,
+        documents: resultDocuments.map(a => ({ name: a.label, type: a.type }))
+      }
+    });
+
+    // WebSocket notification
+    const app = require('../../index');
+    const wsServer = app.get('wsServer');
+    const sponsorId = application.sponsor.userId?.toString?.() || application.sponsor.userId;
+    wsServer?.sendToUser(sponsorId, 'notification', {
+      type: 'success',
+      message: `Application results are now available!`,
+      applicationId: application._id.toString(),
+      timestamp: new Date()
+    });
+  } catch (e) {
+    // non-blocking
+  }
+
+  res.status(200).json({
+    status: "success",
+    data: { resultDocuments },
+    message: 'Result documents uploaded successfully'
   });
 });
 

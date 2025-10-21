@@ -4,8 +4,19 @@ const documentSchema = new mongoose.Schema({
   type: { type: String, required: true },
   path: { type: String, required: true },
   remarks: { type: String, default: "" },
-  uploadDate: { type: Date, default: Date.now }
-}, { _id: false });
+  uploadDate: { type: Date, default: Date.now },
+  expiryDate: { type: Date },
+  documentNumber: { type: String },
+  issuedBy: { type: String },
+  issuedDate: { type: Date },
+  status: { 
+    type: String, 
+    enum: ['valid', 'expiring_soon', 'expired', 'pending'], 
+    default: 'valid' 
+  },
+  notificationSent: { type: Boolean, default: false },
+  lastNotificationDate: { type: Date }
+}, { _id: true });
 
 const fileRefSchema = new mongoose.Schema({
   path: { type: String, required: true },
@@ -92,6 +103,47 @@ const userSchema = new mongoose.Schema({
   deleted: {
     type: Boolean,
     default: false
+  },
+  
+  // Business Information
+  business: {
+    hasCompany: { type: Boolean, default: false },
+    companyName: String,
+    tradeLicense: {
+      number: String,
+      path: String,
+      issueDate: Date,
+      expiryDate: Date,
+      authority: String,
+      type: { type: String, enum: ['mainland', 'freezone', 'offshore'] }
+    },
+    establishmentType: { type: String, enum: ['mainland', 'freezone', 'offshore'] },
+    businessActivity: String,
+    establishmentCard: {
+      number: String,
+      path: String,
+      expiryDate: Date
+    }
+  },
+
+  // Compliance & Notifications
+  compliance: {
+    score: { type: Number, default: 100, min: 0, max: 100 },
+    lastChecked: Date,
+    expiringDocuments: [{ 
+      documentId: mongoose.Schema.Types.ObjectId,
+      documentType: String,
+      expiryDate: Date,
+      daysRemaining: Number
+    }],
+    notificationPreferences: {
+      email: { type: Boolean, default: true },
+      sms: { type: Boolean, default: false },
+      push: { type: Boolean, default: true },
+      expiryReminder30Days: { type: Boolean, default: true },
+      expiryReminder15Days: { type: Boolean, default: true },
+      expiryReminder7Days: { type: Boolean, default: true }
+    }
   },
   
 }, {

@@ -176,7 +176,7 @@ const visaApplicationSchema = new mongoose.Schema({
     income: Number
   },
 
-  // Document Attachments
+  // Document Attachments (applicant submitted documents)
   attachments: [{
     type: {
       type: String,
@@ -270,6 +270,60 @@ const visaApplicationSchema = new mongoose.Schema({
         default: Date.now
       }
     }]
+  }],
+
+  // Result Documents (ICP receipts, transaction papers, visa approvals - uploaded by Amer officers)
+  resultDocuments: [{
+    type: {
+      type: String,
+      required: true,
+      enum: ['icp_receipt', 'transaction_paper', 'visa_approval', 'visa_result', 'other_result']
+    },
+    label: {
+      type: String,
+      required: true
+    },
+    path: {
+      type: String,
+      required: true
+    },
+    originalName: {
+      type: String,
+      required: true
+    },
+    fileSize: {
+      type: Number,
+      required: true
+    },
+    mimeType: {
+      type: String,
+      required: true
+    },
+    uploadedAt: {
+      type: Date,
+      default: Date.now
+    },
+    uploadedBy: {
+      type: mongoose.Schema.ObjectId,
+      ref: 'User',
+      required: true
+    },
+    uploadedByRole: {
+      type: String,
+    },
+    extractedData: {
+      type: mongoose.Schema.Types.Mixed
+    },
+    description: {
+      type: String
+    },
+    isPublic: {
+      type: Boolean,
+      default: true
+    },
+    downloadUrl: {
+      type: String
+    }
   }],
 
   // Application Metadata

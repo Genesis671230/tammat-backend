@@ -24,9 +24,11 @@ router.post('/',auth, visaApplicationController.createApplication);
 router.get('/my-applications', visaApplicationController.getMyApplications);
 // Amer: request additional documents (must come before /:applicationId)
 router.post('/:applicationId/request-documents', auth.requireRole('amer', 'admin'), visaApplicationController.requestDocuments);
+router.post('/:applicationId/result-documents', auth.requireRole('amer', 'admin'), visaApplicationController.uploadApplicationFiles, visaApplicationController.uploadResultDocuments);
 router.post('/:applicationId/otp', auth.requireRole('amer', 'admin'), visaApplicationController.requestOTP);
 router.post('/:applicationId/attachments/:attachmentId/review', auth.requireRole('amer', 'admin'), visaApplicationController.reviewAttachment);
 router.get('/:applicationId/attachments/:attachmentId/download', visaApplicationController.downloadAttachment);
+router.get('/:applicationId/result-documents/:attachmentId/download', visaApplicationController.downloadResultDocument);
 router.post('/:applicationId/documents',auth, visaApplicationController.uploadApplicationFiles, visaApplicationController.uploadDocuments);
 router.put('/:applicationId/documents',auth, visaApplicationController.uploadApplicationFiles, visaApplicationController.uploadDocuments);
 router.post('/:applicationId/comments', visaApplicationController.addComment);
@@ -37,4 +39,5 @@ router.patch('/:applicationId/status', auth.requireRole('amer', 'admin'), visaAp
 router.post('/:applicationId/fraud-alerts', auth.requireRole('amer', 'admin'), visaApplicationController.addFraudAlert);
 router.post('/:applicationId/penalties', auth.requireRole('amer', 'admin'), visaApplicationController.issuePenalty);
 
+router.get('/uploads/applications/:attachmentId', visaApplicationController.downloadAnyDocument);
 module.exports = router;

@@ -518,6 +518,252 @@ const getUserEntries = async (req, res) => {
   }
 };
 
+// Get user profile with documents and compliance
+const getUserProfile = async (req, res) => {
+  try {
+    const userId = req.user?.userId || req.params.id;
+    const user = await User.findById(userId).select('-password');
+    
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Calculate document expiry status
+    if (user.documents && user.documents.length > 0) {
+      user.documents.forEach(doc => {
+        if (doc.expiryDate) {
+          const today = new Date();
+          const expiryDate = new Date(doc.expiryDate);
+          const daysRemaining = Math.ceil((expiryDate - today) / (1000 * 60 * 60 * 24));
+          
+          if (daysRemaining < 0) {
+            doc.status = 'expired';
+          } else if (daysRemaining <= 30) {
+            doc.status = 'expiring_soon';
+          } else {
+            doc.status = 'valid';
+          }
+        }
+      });
+    }
+
+    res.json(user);
+  } catch (error) {
+    console.error('Get user profile error:', error);
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// Update user profile
+const updateUserProfile = async (req, res) => {
+  try {
+    const userId = req.user?.userId || req.params.id;
+    const { firstName, lastName, email, phoneNumber, country, company } = req.body;
+    
+    const updateData = {
+      firstName,
+      lastName,
+      email,
+      phoneNumber,
+      country,
+      company
+    };
+
+    // Remove undefined values
+    Object.keys(updateData).forEach(key => 
+      updateData[key] === undefined && delete updateData[key]
+    );
+
+    const user = await User.findByIdAndUpdate(
+      userId,
+      { $set: updateData },
+      { new: true, runValidators: true }
+    ).select('-password');
+
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    res.json({ user, message: 'Profile updated successfully' });
+  } catch (error) {
+    console.error('Update user profile error:', error);
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// Update user documents with expiry tracking
+const updateUserDocuments = async (req, res) => {
+  try {
+    const userId = req.user?.userId || req.params.id;
+    const { type, expiryDate, documentNumber, issuedBy, issuedDate } = req.body;
+    const file = req.file;
+
+    if (!file) {
+      return res.status(400).json({ error: 'No file uploaded' });
+    }
+
+    const document = {
+      type,
+      path: file.path,
+      uploadDate: new Date(),
+      expiryDate: expiryDate ? new Date(expiryDate) : undefined,
+      documentNumber,
+      issuedBy,
+      issuedDate: issuedDate ? new Date(issuedDate) : undefined,
+      status: 'valid'
+    };
+
+    // Calculate status if expiry date is provided
+    if (expiryDate) {
+      const daysRemaining = Math.ceil((new Date(expiryDate) - new Date()) / (1000 * 60 * 60 * 24));
+      if (daysRemaining < 0) {
+        document.status = 'expired';
+      } else if (daysRemaining <= 30) {
+        document.status = 'expiring_soon';
+      }
+    }
+
+    const user = await User.findByIdAndUpdate(
+      userId,
+      { $push: { documents: document } },
+      { new: true }
+    ).select('-password');
+
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    res.json({ user, message: 'Document uploaded successfully' });
+  } catch (error) {
+    console.error('Update user documents error:', error);
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// Get compliance status
+const getComplianceStatus = async (req, res) => {
+  try {
+    const userId = req.user?.userId || req.params.id;
+    const user = await User.findById(userId).select('documents compliance business');
+    
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Calculate expiring documents
+    const expiringDocuments = [];
+    const today = new Date();
+    
+    if (user.documents) {
+      user.documents.forEach(doc => {
+        if (doc.expiryDate) {
+          const expiryDate = new Date(doc.expiryDate);
+          const daysRemaining = Math.ceil((expiryDate - today) / (1000 * 60 * 60 * 24));
+          
+          if (daysRemaining <= 30) {
+            expiringDocuments.push({
+              documentId: doc._id,
+              documentType: doc.type,
+              expiryDate: doc.expiryDate,
+              daysRemaining,
+              status: daysRemaining < 0 ? 'expired' : 'expiring_soon'
+            });
+          }
+        }
+      });
+    }
+
+    // Calculate compliance score
+    let complianceScore = 100;
+    const expiredDocs = expiringDocuments.filter(d => d.daysRemaining < 0).length;
+    const expiringSoon = expiringDocuments.filter(d => d.daysRemaining >= 0 && d.daysRemaining <= 30).length;
+    
+    complianceScore -= (expiredDocs * 20);
+    complianceScore -= (expiringSoon * 10);
+    complianceScore = Math.max(0, complianceScore);
+
+    // Update compliance data
+    await User.findByIdAndUpdate(userId, {
+      'compliance.score': complianceScore,
+      'compliance.lastChecked': today,
+      'compliance.expiringDocuments': expiringDocuments
+    });
+
+    res.json({
+      complianceScore,
+      expiringDocuments,
+      totalDocuments: user.documents?.length || 0,
+      expiredCount: expiredDocs,
+      expiringSoonCount: expiringSoon,
+      business: user.business || {}
+    });
+  } catch (error) {
+    console.error('Get compliance status error:', error);
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// Update business information
+const updateBusinessInfo = async (req, res) => {
+  try {
+    const userId = req.user?.userId || req.params.id;
+    const { hasCompany, companyName, establishmentType, businessActivity, tradeLicense, establishmentCard } = req.body;
+    
+    const businessData = {
+      hasCompany,
+      companyName,
+      establishmentType,
+      businessActivity
+    };
+
+    if (tradeLicense) {
+      businessData.tradeLicense = tradeLicense;
+    }
+
+    if (establishmentCard) {
+      businessData.establishmentCard = establishmentCard;
+    }
+
+    const user = await User.findByIdAndUpdate(
+      userId,
+      { $set: { business: businessData } },
+      { new: true }
+    ).select('-password');
+
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    res.json({ user, message: 'Business information updated successfully' });
+  } catch (error) {
+    console.error('Update business info error:', error);
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// Delete user document
+const deleteUserDocument = async (req, res) => {
+  try {
+    const userId = req.user?.userId || req.params.id;
+    const { documentId } = req.params;
+    
+    const user = await User.findByIdAndUpdate(
+      userId,
+      { $pull: { documents: { _id: documentId } } },
+      { new: true }
+    ).select('-password');
+
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    res.json({ user, message: 'Document deleted successfully' });
+  } catch (error) {
+    console.error('Delete user document error:', error);
+    res.status(500).json({ error: error.message });
+  }
+};
+
 module.exports = {
   register,
   login,
@@ -536,4 +782,10 @@ module.exports = {
   getUserEntries,
   getUserStats,
   updateDocuments,
+  getUserProfile,
+  updateUserProfile,
+  updateUserDocuments,
+  getComplianceStatus,
+  updateBusinessInfo,
+  deleteUserDocument,
 };

@@ -56,6 +56,7 @@ const notificationsRoutes = require('./controllers/notifications/_routes');
 const dependentsRoutes = require('./controllers/dependents/_routes');
 const paymentsRoutes = require('./controllers/payments/_routes');
 const adminRoutes = require('./controllers/admin/_routes');
+const userRoutes = require('./controllers/user/_routes');
 app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/visa', visaRoutes);
 app.use('/api/v1/chat', chatRoutes);
@@ -64,7 +65,7 @@ app.use('/api/v1/notifications', notificationsRoutes);
 app.use('/api/v1/dependents', dependentsRoutes);
 app.use('/api/v1/services/payments', paymentsRoutes);
 app.use('/api/v1/admin', adminRoutes);
-
+app.use('/api/v1/user', userRoutes);
 // Chat WebSocket routes
 const { router: chatWebSocketRoutes, setupWebSocket } = require('./routes/chat');
 app.use('/api/chat', chatWebSocketRoutes);

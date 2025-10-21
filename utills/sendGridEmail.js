@@ -14,18 +14,35 @@ sgMail.setApiKey(`${sendGridApiKey}`);
       // template_id: "d-08bbcfc4d1cd4b859f024e391434979a"
 // };
 
-const sendMail = (msg) => {
-  return sgMail
-    .send(msg)
-    .then((response) => {
-      console.log(response[0].statusCode);
-      console.log(response[0].headers);
-      console.log(response[0].body),"sendMail body: ";
-      return response[0];
-    })
-    .catch((error) => {
-      console.error("catch error: ", error?.response?.body);
-    });
-};
 
+
+const sendMail = async ({ to, subject, template_id, dynamic_data }) => {
+  try {
+    const msg = {
+    to,
+    from: process.env.SENDGRID_FROM_EMAIL,
+    subject,
+    templateId: template_id,
+    dynamicTemplateData: dynamic_data
+  };
+  const response = await sgMail.send(msg);
+  console.log("sendMail response: ", response[0].statusCode);
+  console.log("sendMail response headers: ", response[0].headers);
+  console.log("sendMail response body: ", response[0].body);
+  return response[0];
+  } catch (error) {
+    console.error("catch error: ", error?.response?.body);
+  }
+  // return sgMail
+  //   .send(msg)
+  //   .then((response) => {
+  //     console.log(response[0].statusCode);
+  //     console.log(response[0].headers);
+  //     console.log(response[0].body),"sendMail body: ";
+  //     return response[0];
+  //   })
+  //   .catch((error) => {
+  //     console.error("catch error: ", error?.response?.body);
+  //   });
+};
 module.exports = { sendMail };
