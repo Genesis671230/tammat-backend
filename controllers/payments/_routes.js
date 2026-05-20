@@ -1,35 +1,33 @@
+// controllers/services/payments/_routes.js
+//
+// Routes file — auth-protected endpoints ONLY.
+// The webhook is registered in app.js (NOT here) because:
+//   1. Stripe doesn't send JWT auth — would fail router.use(auth)
+//   2. Stripe needs raw body, not JSON-parsed
+// Both requirements are handled in app.js with express.raw().
+
 const express = require('express');
 const router = express.Router();
-const auth = require('../../middelwares/auth');
+const auth = require('../../middelwares/auth'); // adjust path if needed
+const controller = require('./paymentsController');
 
-let stripe = null;
-try {
-  stripe = require('stripe')(process.env.STRIPE_SECRET_KEY || '');
-} catch {}
-
+// All routes below require authentication
 router.use(auth);
 
-router.post('/create-intent', async (req, res) => {
-  try {
-    if (!stripe) return res.status(503).json({ success: false, message: 'Payments unavailable' });
-    const { amount, currency = 'aed', metadata = {}, payment_method_id } = req.body || {};
-    if (!amount || amount < 100) return res.status(400).json({ success: false, message: 'Invalid amount' });
-    const intent = await stripe.paymentIntents.create({
-      amount,
-      currency,
-      metadata,
-      payment_method: payment_method_id,
-      confirmation_method: 'manual',
-      confirm: true,
-      // automatic_payment_methods: { enabled: true },
-      receipt_email: req.user.email,
-    });
-    res.json({ success: true, data: { clientSecret: intent.client_secret, id: intent.id, status: intent.status } });
-  } catch (e) {
-    res.status(500).json({ success: false, message: e.message });
-  }
-});
+// ─── Flow A: Stripe Checkout (hosted page) ─────────────────────────────────
+router.post('/checkout-session', controller.createCheckoutSession);
+router.get('/checkout-session/:sessionId/verify', controller.verifyCheckoutSession);
+
+// ─── Flow B: Stripe Elements (embedded card form) ──────────────────────────
+router.post('/subscriptions', controller.createSubscription);
+router.post('/subscriptions/:subId/sync', controller.syncSubscription);
+
+// ─── Subscription management ───────────────────────────────────────────────
+router.get('/subscriptions/current', controller.getCurrentSubscription);
+router.post('/subscriptions/cancel', controller.cancelSubscription);
+router.post('/subscriptions/resume', controller.resumeSubscription);
+
+// ─── Customer Portal (Stripe-hosted manage page) ───────────────────────────
+router.post('/portal-session', controller.createPortalSession);
 
 module.exports = router;
-
-

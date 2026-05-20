@@ -29,11 +29,12 @@ const officerCommentSchema = new mongoose.Schema({
 }, { _id: true });
 
 const requestedDocumentSchema = new mongoose.Schema({
-  label: { type: String, required: true },
-  description: { type: String },
+  label: { type: String },
+  attachmentUploaded: attachmentSchema,
   requestedAt: { type: Date, default: Date.now },
   requestedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
-  fulfilledAt: { type: Date }
+  fulfilledAt: { type: Date },
+  requestStatus: { type: String, enum: ['pending', 'fulfilled', 'rejected'], default: 'pending' }
 }, { _id: true });
 
 const historySchema = new mongoose.Schema({

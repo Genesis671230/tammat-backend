@@ -25,24 +25,24 @@ router.post('/backup', auth, requireRole('admin'), servicesController.backupServ
 router.post('/restore', auth, requireRole('admin'), servicesController.restoreServices);
 
 // Payments: create Stripe PaymentIntent (optional configuration)
-router.post('/payments/create-intent', auth, async (req, res) => {
-  try {
-    if (!stripe) return res.status(500).json({ success: false, message: 'Stripe not configured' });
-    const { amount, currency = 'aed', metadata = {} } = req.body || {};
-    if (!amount || Number.isNaN(Number(amount))) {
-      return res.status(400).json({ success: false, message: 'Amount is required' });
-    }
-    const intent = await stripe.paymentIntents.create({
-      amount: Math.round(Number(amount)),
-      currency,
-      metadata,
-      description: 'TAMMAT application payment'
-    });
-    res.status(200).json({ success: true, data: { clientSecret: intent.client_secret } });
-  } catch (e) {
-    console.error('Stripe create-intent error', e);
-    res.status(500).json({ success: false, message: 'Failed to create payment intent' });
-  }
-});
+// router.post('/payments/create-intent', auth, async (req, res) => {
+//   try {
+//     if (!stripe) return res.status(500).json({ success: false, message: 'Stripe not configured' });
+//     const { amount, currency = 'aed', metadata = {} } = req.body || {};
+//     if (!amount || Number.isNaN(Number(amount))) {
+//       return res.status(400).json({ success: false, message: 'Amount is required' });
+//     }
+//     const intent = await stripe.paymentIntents.create({
+//       amount: Math.round(Number(amount)),
+//       currency,
+//       metadata,
+//       description: 'TAMMAT application payment'
+//     });
+//     res.status(200).json({ success: true, data: { clientSecret: intent.client_secret } });
+//   } catch (e) {
+//     console.error('Stripe create-intent error', e);
+//     res.status(500).json({ success: false, message: 'Failed to create payment intent' });
+//   }
+// });
 
 module.exports = router; 

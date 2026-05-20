@@ -145,6 +145,15 @@ const userSchema = new mongoose.Schema({
       expiryReminder7Days: { type: Boolean, default: true }
     }
   },
+  stripeCustomerId: { type: String, index: true },
+  stripeSubscriptionId: { type: String },
+  subscriptionStatus: {
+    type: String,
+    enum: ['active', 'past_due', 'canceled', 'incomplete', 'incomplete_expired', 'trialing', 'unpaid', null],
+    default: null,
+  },
+  subscriptionLookupKey: { type: String }, // tammat_monthly, tammat_yearly, etc.
+  lastPaidAt: { type: Date },
   
 }, {
   timestamps: true,

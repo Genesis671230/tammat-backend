@@ -1,11 +1,14 @@
 const express = require('express');
-const router = express.Router();
 const auth = require('../../middelwares/auth');
 const AuditLog = require('../../model/schema/auditLog');
 const User = require('../../model/schema/user');
 const VisaApplication = require('../../model/schema/visaApplication');
 const Announcement = require('../../model/schema/announcement');
+// routes/admin/applications.js
+const Application = require('../../model/schema/application.js');
 
+
+const router = express.Router();
 // Admin-only
 router.use(auth, auth.requireRole('admin', 'amer'));
 
@@ -149,4 +152,55 @@ router.get('/officers/:id/applications', async (req, res) => {
   } catch (e) { res.status(500).json({ status: 'error', message: e.message }) }
 });
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+// Queue: paid applications awaiting fulfillment
+router.get('/queue', auth, async (req, res) => {
+  const apps = await Application.find({ status: { $in: ['paid', 'processing'] } })
+    .sort({ isFastTrack: -1, paidAt: 1 })
+    .populate('userId', 'email fullName')
+    .limit(100);
+  res.json({ applications: apps });
+});
+
+// Start processing
+router.post('/:id/start', auth, async (req, res) => {
+  const app = await Application.findByIdAndUpdate(
+    req.params.id,
+    { status: 'processing', startedAt: new Date(), processedBy: req.user._id },
+    { new: true }
+  );
+  res.json({ application: app });
+});
+
+// Complete with result
+router.post('/:id/complete', auth, async (req, res) => {
+  const { result, resultNotes } = req.body;
+  const app = await Application.findByIdAndUpdate(
+    req.params.id,
+    { status: 'completed', completedAt: new Date(), result, resultNotes },
+    { new: true }
+  );
+  // TODO: send WhatsApp + email to customer
+  res.json({ application: app });
+});
 

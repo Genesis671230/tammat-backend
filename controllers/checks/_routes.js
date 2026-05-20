@@ -3,6 +3,8 @@ const router = express.Router();
 const jwt = require('jsonwebtoken');
 const auth = require('../../middelwares/auth');
 const checksController = require('./checksController');
+const { verifyPaymentSucceeded } = require('../payments/paymentsController');
+const VisaCheck = require('../../model/schema/visaCheck');
 
 // ---------------------------------------------------------------------------
 // optionalAuth — decodes JWT if present; always calls next()
@@ -32,6 +34,7 @@ const optionalAuth = (req, res, next) => {
 // GET  /                    → authenticated user's own checks
 router.get('/', auth, checksController.getUserChecks);
 
+router.get('/user/:userId', auth, checksController.getUserChecks);
 // POST /                    → create a new check (auth optional, supports guest)
 router.post(
   '/',
@@ -54,9 +57,10 @@ router.get('/:checkId', optionalAuth, checksController.getCheckById);
 
 // POST /:checkId/documents  → user/guest uploads supporting docs
 router.post(
-  '/:checkId/documents',
+  '/:checkId/documents/:requestedDocumentId',
   optionalAuth,
-  ...checksController.uploadCheckDocuments
+  // checksController.uploadCheckFiles,
+  ...checksController.uploadCheckDocuments,
 );
 
 // PUT  /:checkId/status     → officer updates check status

@@ -5,6 +5,9 @@ const fsSync = require('fs');
 const VisaCheck = require('../../model/schema/visaCheck');
 const catchAsync = require('../../utills/catchAsync');
 const AppError = require('../../utills/appError');
+const { verifyPaymentSucceeded } = require('../payments/paymentsController');
+const User = require('../../model/schema/user');
+const { SERVICES } = require('./services.js');
 
 // ---------------------------------------------------------------------------
 // Multer helpers
@@ -120,6 +123,47 @@ exports.createCheck = catchAsync(async (req, res, next) => {
     return next(new AppError('serviceType is required.', 400));
   }
 
+
+// Inside createCheck:
+const FREE_SERVICES = ['overstay-fine', 'absconding'];
+const isFreeService = FREE_SERVICES.includes(req.body.serviceId);
+
+
+
+
+if (!isFreeService && req.user) {
+  // Check if user has active subscription
+  const user = await User.findById(req.user._id);
+  const hasActiveSub = ['active', 'trialing'].includes(user?.subscriptionStatus);
+
+  if (!hasActiveSub) {
+    // Not subscribed — verify per-check payment
+    const { paymentIntentId } = req.body;
+    const expectedAmount = SERVICES.find(service => service.id === serviceId)?.priceStandard || 0;
+    // const verification = await verifyPaymentSucceeded(paymentIntentId, expectedAmount * 100);
+    // if (!verification.valid) {
+    //   return res.status(402).json({ success: false, message: verification.reason });
+    // }
+    // req.body.paidAmount = verification.paymentIntent.amount;
+  } else {
+    // Subscribed — log it on the check for reconciliation
+    req.body.subscriptionId = user.stripeSubscriptionId;
+    req.body.paidViaSubscription = true;
+  }
+}
+const user = await User.findById(req.user._id);
+
+if (!isFreeService) {
+  const hasActiveSub = ['active', 'trialing'].includes(user?.subscriptionStatus);
+  if (!hasActiveSub) {
+    return res.status(402).json({
+      success: false,
+      message: 'Active subscription required',
+      code: 'SUBSCRIPTION_REQUIRED'
+    });
+  }
+}
+
   // Parse identifiers — can arrive as a JSON string or a plain object
   let identifiers = {};
   if (req.body.identifiers) {
@@ -139,7 +183,8 @@ exports.createCheck = catchAsync(async (req, res, next) => {
   let amount = 0;
   let status = 'submitted';
 
-  if (!isFree) {
+  const hasActiveSub = ['active', 'trialing'].includes(user?.subscriptionStatus);
+  if (!isFree && !hasActiveSub) {
     amount = speedTier === 'fast-track' ? 50 : 20;
     status = 'pending_payment';
   }
@@ -198,7 +243,7 @@ exports.createCheck = catchAsync(async (req, res, next) => {
 exports.getUserChecks = catchAsync(async (req, res, next) => {
   const checks = await VisaCheck.find({ userId: req.user._id })
     .sort({ createdAt: -1 })
-    .select('-officerComments -requestedDocuments -history');
+    // .select('-officerComments -requestedDocuments -history');
 
   res.status(200).json({
     status: 'success',
@@ -244,6 +289,7 @@ exports.uploadCheckDocuments = [
   uploadToCheck.array('documents', 10),
   catchAsync(async (req, res, next) => {
     const check = await VisaCheck.findById(req.params.checkId);
+
     if (!check) {
       return next(new AppError('No check found with that ID.', 404));
     }
@@ -251,6 +297,8 @@ exports.uploadCheckDocuments = [
     if (!req.files || req.files.length === 0) {
       return next(new AppError('No files uploaded.', 400));
     }
+
+    
 
     const newAttachments = req.files.map(f => ({
       originalName: f.originalname,
@@ -271,10 +319,33 @@ exports.uploadCheckDocuments = [
       performedByRole: req.user ? req.user.role : 'guest',
       at: new Date()
     });
+    const uploadedDocument = newAttachments[0];
+
+    check.requestedDocuments.forEach(doc => {
+      if (doc._id.toString() === req.params.requestedDocumentId) {
+
+        doc.attachmentUploaded = {
+          originalName: uploadedDocument.originalName,
+          filename: uploadedDocument.filename,
+          path: uploadedDocument.path,
+          mimetype: uploadedDocument.mimetype,
+          size: uploadedDocument.size,
+          uploadedAt: uploadedDocument.uploadedAt,
+          uploadedBy: uploadedDocument.uploadedBy
+        };
+        doc.fulfilledAt = new Date();
+        doc.requestStatus = 'fulfilled';
+      }
+    });
 
     // If the check was in requires_documents, move it back to submitted
     if (check.status === 'requires_documents') {
-      check.status = 'submitted';
+      // check.status = 'submitted';
+      const isAllFulfilled = check.requestedDocuments.every(doc => doc.requestStatus === 'fulfilled');
+      if (isAllFulfilled) {
+        check.status = 'submitted';
+      }
+
       check.history.push({
         action: 'resubmitted',
         note: 'Requested documents uploaded; check resubmitted.',
@@ -419,7 +490,6 @@ exports.uploadCheckResult = [
   uploadResult.array('resultFiles', 5),
   catchAsync(async (req, res, next) => {
     const { resultSummary, resultStatus } = req.body;
-
     const validResultStatuses = ['clear', 'flagged', 'pending'];
     if (!resultStatus || !validResultStatuses.includes(resultStatus)) {
       return next(new AppError(`resultStatus must be one of: ${validResultStatuses.join(', ')}.`, 400));
@@ -445,7 +515,10 @@ exports.uploadCheckResult = [
 
     check.resultSummary = resultSummary || '';
     check.resultStatus = resultStatus;
-    check.status = 'completed';
+    const isAllFulfilled = check.requestedDocuments.every(doc => doc.requestStatus === 'fulfilled');
+    if (isAllFulfilled) {
+      check.status = 'completed';
+    }
 
     check.history.push({
       action: 'result_uploaded',

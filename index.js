@@ -7,9 +7,15 @@ const port = 5001;
 require("dotenv").config();
 const fs = require("fs");
 const path = require("path");
-
-//Setup Express App
 const app = express();
+
+const paymentsController = require('./controllers/payments/paymentsController');
+app.post(
+	'/api/v1/services/payments/webhook',
+	express.raw({ type: 'application/json' }),
+	paymentsController.webhookHandler
+);
+//Setup Express App
 // Middleware
 app.use(bodyParser.json());
 
