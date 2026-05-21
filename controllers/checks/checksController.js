@@ -129,12 +129,12 @@ const FREE_SERVICES = ['overstay-fine', 'absconding'];
 const isFreeService = FREE_SERVICES.includes(req.body.serviceId);
 
 
+const user = await User.findById(req.user._id);
 
 
 if (!isFreeService && req.user) {
   // Check if user has active subscription
-  const user = await User.findById(req.user._id);
-  const hasActiveSub = ['active', 'trialing'].includes(user?.subscriptionStatus);
+  const hasActiveSub = (['active', 'trialing'].includes(user?.subscriptionStatus)||!user?.trialUsed);
 
   if (!hasActiveSub) {
     // Not subscribed — verify per-check payment
@@ -151,10 +151,9 @@ if (!isFreeService && req.user) {
     req.body.paidViaSubscription = true;
   }
 }
-const user = await User.findById(req.user._id);
 
 if (!isFreeService) {
-  const hasActiveSub = ['active', 'trialing'].includes(user?.subscriptionStatus);
+  const hasActiveSub = ['active', 'trialing'].includes(user?.subscriptionStatus)||!user?.trialUsed;
   if (!hasActiveSub) {
     return res.status(402).json({
       success: false,
@@ -183,7 +182,7 @@ if (!isFreeService) {
   let amount = 0;
   let status = 'submitted';
 
-  const hasActiveSub = ['active', 'trialing'].includes(user?.subscriptionStatus);
+  const hasActiveSub = (['active', 'trialing'].includes(user?.subscriptionStatus)||!user?.trialUsed);
   if (!isFree && !hasActiveSub) {
     amount = speedTier === 'fast-track' ? 50 : 20;
     status = 'pending_payment';
@@ -202,6 +201,11 @@ if (!isFreeService) {
     history: []
   };
 
+
+  if(!user.trialUsed){
+    user.trialUsed = true;
+    await user.save();
+  }
   const check = await VisaCheck.create(checkData);
 
   // Move any temp-uploaded files into the check's permanent directory

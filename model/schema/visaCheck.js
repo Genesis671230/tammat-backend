@@ -68,7 +68,9 @@ const visaCheckSchema = new mongoose.Schema({
       'application-status',
       'nawakas',
       'establishment-card',
-      'expiry-checker'
+      'expiry-checker',
+      'fine-reduction',
+      'partner-visa-cancellation'
     ],
     index: true
   },

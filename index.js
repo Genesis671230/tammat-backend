@@ -70,10 +70,10 @@ app.use('/api/v1/visa', visaRoutes);
 app.use('/api/v1/checks', checksRoutes);
 app.use('/api/v1/chat', chatRoutes);
 app.use('/api/v1/applications', applicationsRoutes);
-app.use('/api/v1/services', servicesRoutes);
 app.use('/api/v1/notifications', notificationsRoutes);
 app.use('/api/v1/dependents', dependentsRoutes);
 app.use('/api/v1/services/payments', paymentsRoutes);
+app.use('/api/v1/services', servicesRoutes);
 app.use('/api/v1/admin', adminRoutes);
 app.use('/api/v1/user', userRoutes);
 // Chat WebSocket routes

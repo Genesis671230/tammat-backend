@@ -45,4 +45,15 @@ router.post('/restore', auth, requireRole('admin'), servicesController.restoreSe
 //   }
 // });
 
+router.post('/portal-session', (req, res) => {
+//   const { returnUrl } = req.body;
+  console.log(req);
+//   const frontendBase = process.env.FRONTEND_URL || 'http://localhost:5173';
+//   const session = await stripe.billingPortal.sessions.create({
+//     customer: req.user.stripeCustomerId,
+//     return_url: returnUrl || `${frontendBase}/customer-dashboard`,
+//   });
+//   res.status(200).json({ success: true, url: session.url });
+});
+
 module.exports = router; 

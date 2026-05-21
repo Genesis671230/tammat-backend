@@ -145,6 +145,7 @@ const userSchema = new mongoose.Schema({
       expiryReminder7Days: { type: Boolean, default: true }
     }
   },
+  trialUsed: { type: Boolean, default: false },
   stripeCustomerId: { type: String, index: true },
   stripeSubscriptionId: { type: String },
   subscriptionStatus: {

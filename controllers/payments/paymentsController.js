@@ -556,8 +556,10 @@ exports.syncSubscription = async (req, res) => {
 
 exports.createPortalSession = async (req, res) => {
   try {
+    console.log("req.user", req.user);
     if (!req.user) return res.status(401).json({ success: false, message: 'Auth required' });
-    if (!req.user.stripeCustomerId) {
+    const user = await User.findById(req.user._id);
+    if (!user.stripeCustomerId) {
       return res.status(404).json({ success: false, message: 'No Stripe customer found' });
     }
 
@@ -565,7 +567,7 @@ exports.createPortalSession = async (req, res) => {
     const frontendBase = process.env.FRONTEND_URL || 'http://localhost:5173';
 
     const session = await stripe.billingPortal.sessions.create({
-      customer: req.user.stripeCustomerId,
+      customer: user.stripeCustomerId,
       return_url: returnUrl || `${frontendBase}/customer-dashboard`,
     });
 
