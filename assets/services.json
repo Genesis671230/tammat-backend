@@ -3002,6 +3002,144 @@
         ],
         "minimumPrice": 5045
       }
-    ]
+    ],
+    "packagedServices":[{
+  "sub1Recordid": 12,
+  "sub1ServiceName": "Packages",
+  "categoryTag": "TMMT is your trusted partner for UAE visa and residency services.",
+  "sub1Slug": "packages",
+  "stickyNotes": "Services and government fees may change as per UAE regulations.",
+  "sideCardtitle": [
+    "Why Choose TMMT Packages"
+  ],
+  "subCategory": [
+    {
+      "sub2RecordId": 59,
+      "sub2Slug": "PK1",
+      "sub2ServiceName": "Golden Visa",
+      "sub2Description": "Complete Golden Visa solution.",
+      "news": "Get long-term UAE residency with a simple end-to-end process managed by TMMT.",
+      "page_url": "golden-visa",
+      "services": [
+        {
+          "serviceName": "Golden Visa",
+          "outsideDescription": "10-year UAE residency for eligible professionals and investors.----Includes medical, Emirates ID, and visa processing.",
+          "outsideDescriptionArray": [
+            "10-year UAE residency for eligible professionals and investors.",
+            "Includes medical, Emirates ID, and visa processing."
+          ]
+        }
+      ]
+    },
+    {
+      "sub2RecordId": 73,
+      "sub2Slug": "PK3",
+      "sub2ServiceName": "Investor Visa",
+      "sub2Description": "Investor residency made easy.",
+      "news": "Secure UAE residency through business or property investment.",
+      "page_url": "investor-visa",
+      "services": [
+        {
+          "serviceName": "Investor Visa",
+          "outsideDescription": "Residency for investors and entrepreneurs.----Includes permit, Emirates ID, and visa stamping.",
+          "outsideDescriptionArray": [
+            "Residency for investors and entrepreneurs.",
+            "Includes permit, Emirates ID, and visa stamping."
+          ]
+        }
+      ]
+    },
+    {
+      "sub2RecordId": 74,
+      "sub2Slug": "PK4",
+      "sub2ServiceName": "Parents Visa",
+      "sub2Description": "Sponsor your parents with ease.",
+      "news": "Bring your parents to the UAE with TMMT's complete visa package.",
+      "page_url": "parents-visa",
+      "services": [
+        {
+          "serviceName": "Parents Visa",
+          "outsideDescription": "Residency visa for parents.----Includes medical, Emirates ID, and visa processing.",
+          "outsideDescriptionArray": [
+            "Residency visa for parents.",
+            "Includes medical, Emirates ID, and visa processing."
+          ]
+        }
+      ]
+    },
+    {
+      "sub2RecordId": 75,
+      "sub2Slug": "PK5",
+      "sub2ServiceName": "Spouse Visa",
+      "sub2Description": "Simple spouse sponsorship package.",
+      "news": "Live together in the UAE with a streamlined spouse visa process.",
+      "page_url": "spouse-visa",
+      "services": [
+        {
+          "serviceName": "Spouse Visa",
+          "outsideDescription": "Residency visa for spouses.----Includes permit, Emirates ID, and visa stamping.",
+          "outsideDescriptionArray": [
+            "Residency visa for spouses.",
+            "Includes permit, Emirates ID, and visa stamping."
+          ]
+        }
+      ]
+    },
+    {
+      "sub2RecordId": 76,
+      "sub2Slug": "PK6",
+      "sub2ServiceName": "Employment Visa",
+      "sub2Description": "Everything needed for your work visa.",
+      "news": "Start your UAE career with complete employment visa support from TMMT.",
+      "page_url": "employment-visa",
+      "services": [
+        {
+          "serviceName": "Employment Visa",
+          "outsideDescription": "Work residency for employees.----Includes permit, Emirates ID, and visa processing.",
+          "outsideDescriptionArray": [
+            "Work residency for employees.",
+            "Includes permit, Emirates ID, and visa processing."
+          ]
+        }
+      ]
+    },
+    {
+      "sub2RecordId": 77,
+      "sub2Slug": "PK7",
+      "sub2ServiceName": "Children Visa",
+      "sub2Description": "Keep your family together.",
+      "news": "Sponsor your child with a fast and reliable UAE residency package.",
+      "page_url": "children-visa",
+      "services": [
+        {
+          "serviceName": "Children Visa",
+          "outsideDescription": "Residency visa for children.----Includes permit, Emirates ID, and visa stamping.",
+          "outsideDescriptionArray": [
+            "Residency visa for children.",
+            "Includes permit, Emirates ID, and visa stamping."
+          ]
+        }
+      ]
+    },
+    {
+      "sub2RecordId": 78,
+      "sub2Slug": "PK8",
+      "sub2ServiceName": "New Born Baby Visa",
+      "sub2Description": "Fast residency for newborns.",
+      "news": "Complete your newborn's UAE residency process without delays.",
+      "page_url": "new-born-baby-visa",
+      "services": [
+        {
+          "serviceName": "New Born Baby Visa",
+          "outsideDescription": "Residency visa for newborn babies.----Includes Emirates ID and visa processing.",
+          "outsideDescriptionArray": [
+            "Residency visa for newborn babies.",
+            "Includes Emirates ID and visa processing."
+          ]
+        }
+      ]
+    }
+  ]
+}]
   }
 ]
