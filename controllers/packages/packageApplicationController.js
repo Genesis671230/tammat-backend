@@ -1,7 +1,6 @@
 const path = require('path');
 const fs = require('fs');
 const PackageApplication = require('../../model/schema/PackageApplication');
-const User = require('../../model/schema/user');
 
 const wrap = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
 
@@ -61,6 +60,13 @@ exports.uploadPackageDocuments = wrap(async (req, res) => {
 
   const incoming = [];
 
+  // labels arrive as a single JSON field: { docKey: "Human Label", ... }
+  let labels = {};
+  if (req.body.labels) {
+    try { labels = typeof req.body.labels === 'string' ? JSON.parse(req.body.labels) : req.body.labels; }
+    catch { labels = {}; }
+  }
+
   // Path A: multer files written to disk
   if (Array.isArray(req.files) && req.files.length) {
     for (const file of req.files) {
@@ -68,7 +74,7 @@ exports.uploadPackageDocuments = wrap(async (req, res) => {
       const rel = `/uploads/packages/${application._id}/${path.basename(file.path)}`;
       incoming.push({
         docKey: file.fieldname || 'other',
-        label: req.body[`label_${file.fieldname}`] || file.fieldname,
+        label: labels[file.fieldname] || req.body[`label_${file.fieldname}`] || file.fieldname,
         url: file.location || rel, // file.location set if using S3/R2 storage engine
         originalName: file.originalname,
         fileSize: file.size,
@@ -77,6 +83,12 @@ exports.uploadPackageDocuments = wrap(async (req, res) => {
         uploadedAt: new Date(),
       });
     }
+  } else {
+    // diagnostic: helps you see in server logs whether multer parsed anything
+    console.warn('[package-docs] no req.files parsed', {
+      contentType: req.headers['content-type'],
+      bodyKeys: Object.keys(req.body || {}),
+    });
   }
 
   // Path B: client uploaded to R2 itself and posts metadata as JSON
@@ -181,7 +193,6 @@ exports.requestPackageDocuments = wrap(async (req, res) => {
 /* ------------------------------ COMMENTS -------------------------------- */
 exports.addPackageComment = wrap(async (req, res) => {
   const { message } = req.body || {};
-  const user = await User.findById(req.params.userId);
   if (!message) return res.status(400).json({ status: 'fail', message: 'message is required' });
   const application = await PackageApplication.findById(req.params.id);
   if (!application) return res.status(404).json({ status: 'fail', message: 'Application not found' });
@@ -219,13 +230,12 @@ exports.updatePackagePayment = wrap(async (req, res) => {
 
 /* ------------------------------ DOWNLOAD -------------------------------- */
 exports.downloadPackageDocument = wrap(async (req, res) => {
-  const user = await User.findById(req.params.userId);
-  if (!user) return res.status(404).json({ status: 'fail', message: 'User not found' });
   const application = await PackageApplication.findById(req.params.id);
   if (!application) return res.status(404).json({ status: 'fail', message: 'Application not found' });
+
   // authz: owner or staff
-  const owner = application.userId && String(application.userId) === String(user.userId);
-  if (!owner && (!user.role === 'admin' || !user.role === 'amer')) return res.status(403).json({ status: 'fail', message: 'Not authorized' });
+  const owner = application.userId && String(application.userId) === String(req.user?._id);
+  if (!owner && !isStaff(req)) return res.status(403).json({ status: 'fail', message: 'Not authorized' });
 
   const doc = application.documents.id(req.params.docId) ||
     application.documents.find((d) => String(d._id) === String(req.params.docId));

@@ -3,12 +3,12 @@ const path = require('path');
 const fs = require('fs');
 const router = express.Router();
 const ctrl = require('./packageApplicationController');
-const auth = require('../../middelwares/auth');
 
 // ---- Auth middleware (adjust the require path to your project) ----
 let protect = (req, res, next) => next();
 let optionalAuth = (req, res, next) => next();
 try {
+  const auth = require('../../middleware/auth');
   protect = auth.protect || protect;
   optionalAuth = auth.optionalAuth || auth.softAuth || optionalAuth;
 } catch (_) {}
@@ -23,9 +23,12 @@ try {
   upload = multer({
     storage: multer.diskStorage({
       destination: (req, file, cb) => {
-        // per-application sub-folder, created on the fly
+        // per-application sub-folder. Create SYNCHRONOUSLY so the folder is
+        // guaranteed to exist before multer streams the file into it — the
+        // async mkdir callback could otherwise fire after the write began.
         const dir = path.join(UPLOAD_DIR, String(req.params.id || 'misc'));
-        fs.mkdir(dir, { recursive: true }, (err) => cb(err, dir));
+        try { fs.mkdirSync(dir, { recursive: true }); cb(null, dir); }
+        catch (err) { cb(err, dir); }
       },
       filename: (req, file, cb) =>
         cb(null, `${file.fieldname}-${Date.now()}-${Math.round(Math.random() * 1e9)}${path.extname(file.originalname)}`),
@@ -39,19 +42,19 @@ try {
 } catch (_) {}
 
 // ---- Public lead submission ----
-router.post('/', ctrl.createPackageApplication);
-router.post('/:id/documents', upload.any(), ctrl.uploadPackageDocuments);
-router.get('/:id', auth, ctrl.getPackageApplication);
+router.post('/', optionalAuth, ctrl.createPackageApplication);
+router.post('/:id/documents', optionalAuth, upload.any(), ctrl.uploadPackageDocuments);
+router.get('/:id', optionalAuth, ctrl.getPackageApplication);
 
 // ---- Authenticated (customer) ----
-router.get('/me/list', ctrl.getMyPackageApplications);
-router.post('/:id/comments', auth, ctrl.addPackageComment);
+router.get('/me/list', protect, ctrl.getMyPackageApplications);
+router.post('/:id/comments', protect, ctrl.addPackageComment);
 
 // ---- Admin / Amer ----
-router.get('/', auth, ctrl.listPackageApplications);
-router.patch('/:id/status', auth, ctrl.updatePackageStatus);
-router.post('/:id/request-documents', auth, ctrl.requestPackageDocuments);
-router.patch('/:id/payment', auth, ctrl.updatePackagePayment);
-router.get('/:id/documents/:docId/user/:userId/download', ctrl.downloadPackageDocument);
+router.get('/', protect, ctrl.listPackageApplications);
+router.patch('/:id/status', protect, ctrl.updatePackageStatus);
+router.post('/:id/request-documents', protect, ctrl.requestPackageDocuments);
+router.patch('/:id/payment', protect, ctrl.updatePackagePayment);
+router.get('/:id/documents/:docId/download', protect, ctrl.downloadPackageDocument);
 
 module.exports = router;
