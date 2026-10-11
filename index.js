@@ -77,6 +77,14 @@ app.use('/api/v1/services/payments', paymentsRoutes);
 app.use('/api/v1/services', servicesRoutes);
 app.use('/api/v1/admin', adminRoutes);
 app.use('/api/v1/user', userRoutes);
+app.use('/api/v1/templates', (req, res) => {
+	res.send("Templates");
+	res.json({
+		message: "Templates",
+		description: "Templates for the application",
+		version: "2.0.0"
+	});
+});
 app.use('/api/v1/package-applications',packagesRoutes);
 
 
